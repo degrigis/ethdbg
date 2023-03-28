@@ -342,7 +342,13 @@ class EthDbgShell(cmd.Cmd):
 
         calls_view = ''
         for call in self.callstack[::-1]:
-            calls_view += call.address + ' | ' + call.calltype + ' | ' + call.callsite + ' | ' + call.msg_sender + '\n'
+            if call.calltype == "CALL":
+                calltype_string = f'{PURPLE_COLOR}{call.calltype}{RESET_COLOR}'
+            elif call.calltype == "DELEGATECALL" or call.calltype == "CODECALL":
+                calltype_string = f'{RED_COLOR}{call.calltype}{RESET_COLOR}'
+            else:
+                calltype_string = f'{BLUE_COLOR}{call.calltype}{RESET_COLOR}'
+            calls_view += call.address + ' | ' + calltype_string + ' | ' + call.callsite + ' | ' + call.msg_sender + '\n'
 
         return title + legend + calls_view
 
@@ -475,9 +481,10 @@ class EthDbgShell(cmd.Cmd):
             print(_opcode_str)
 
         if 'PUSH' in opcode.mnemonic:
-            # computation.code.read(1)
-            import ipdb; ipdb.set_trace()
-
+            push_amount = int(opcode.mnemonic.split("PUSH")[1])
+            push_constant = computation.code.peek()
+            _opcode_str += ' '+hex(push_constant)
+            
         self.history.append(_opcode_str)
 
         # BREAKPOINT MANAGEMENT
@@ -618,4 +625,10 @@ if __name__ == "__main__":
                 chain = get_chain_name(w3.eth.chain_id)
 
     ethdbgshell = EthDbgShell(ethdbg_conf, w3, chain, chainrpc, block_ref, target, calldata)
-    ethdbgshell.cmdloop()
+    
+    while True:
+        try:
+            ethdbgshell.cmdloop()
+        except ExitCmdException:
+            print("Program terminated.")
+            continue
