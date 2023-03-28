@@ -173,38 +173,69 @@ class ParisVM(eth.vm.forks.arrow_glacier.ArrowGlacierVM):
 # BUILD STUFF
 # ===========
 
+def to_snake_case(s: str) -> str:
+    return ''.join(['_' + c.lower() if c.isupper() else c for c in s]).lstrip('_')
+
 def build_block_header(w3: web3.Web3, block_number: int) -> BlockHeader:
     """
     Load a block header from geth in the format pyevm likes (not json)
     """
-    result = w3.provider.make_request('debug_getRawHeader', [hex(block_number)])
-    b = bytes.fromhex(result['result'][2:])
-    return _decode_block_header(b)
 
-def get_vm_for_block(block_number: int, hook: OpcodeHook = None) -> typing.Type[VM]:
+    try:
+        result = w3.provider.make_request('debug_getRawHeader', [hex(block_number)])
+        b = bytes.fromhex(result['result'][2:])
+        return _decode_block_header(b)
+    except Exception:
+
+        if w3.eth.chain_id == 11155111:
+            block = w3.eth.get_block(block_number)
+            BlockHeader = eth.vm.forks.london.blocks.LondonBlockHeader
+
+            block_kwargs = {}
+            for key, value in block.items():
+                key_snake = to_snake_case(key)
+                if key_snake in BlockHeader._meta.field_names:
+                    block_kwargs[key_snake] = value
+
+            import ipdb; ipdb.set_trace()
+            header = BlockHeader(
+                block_number=block_number,
+                **block_kwargs
+            )
+            return header
+        else:
+            raise
+
+
+def get_vm_for_block(chain_id, block_number: int, hook: OpcodeHook = None) -> typing.Type[VM]:
     """
     Construct the approprate VM for the given block number, and optionally insert the given hook
     to run after each instruction.
     """
-    
-    assert block_number >= eth.chains.mainnet.constants.PETERSBURG_MAINNET_BLOCK
 
-    if block_number < eth.chains.mainnet.constants.ISTANBUL_MAINNET_BLOCK:
-        TargetVM = eth.vm.forks.petersburg.PetersburgVM
-    elif block_number < eth.chains.mainnet.constants.MUIR_GLACIER_MAINNET_BLOCK:
-        TargetVM = eth.vm.forks.istanbul.IstanbulVM
-    elif block_number < eth.chains.mainnet.constants.BERLIN_MAINNET_BLOCK:
-        TargetVM = eth.vm.forks.muir_glacier.MuirGlacierVM
-    elif block_number < eth.chains.mainnet.constants.LONDON_MAINNET_BLOCK:
-        TargetVM = eth.vm.forks.berlin.BerlinVM
-    elif block_number < eth.chains.mainnet.constants.ARROW_GLACIER_MAINNET_BLOCK:
+    if chain_id == eth.chains.mainnet.constants.MAINNET_CHAIN_ID:
+
+        assert block_number >= eth.chains.mainnet.constants.PETERSBURG_MAINNET_BLOCK
+
+        if block_number < eth.chains.mainnet.constants.ISTANBUL_MAINNET_BLOCK:
+            TargetVM = eth.vm.forks.petersburg.PetersburgVM
+        elif block_number < eth.chains.mainnet.constants.MUIR_GLACIER_MAINNET_BLOCK:
+            TargetVM = eth.vm.forks.istanbul.IstanbulVM
+        elif block_number < eth.chains.mainnet.constants.BERLIN_MAINNET_BLOCK:
+            TargetVM = eth.vm.forks.muir_glacier.MuirGlacierVM
+        elif block_number < eth.chains.mainnet.constants.LONDON_MAINNET_BLOCK:
+            TargetVM = eth.vm.forks.berlin.BerlinVM
+        elif block_number < eth.chains.mainnet.constants.ARROW_GLACIER_MAINNET_BLOCK:
+            TargetVM = eth.vm.forks.london.LondonVM
+        elif block_number < eth.chains.mainnet.constants.GRAY_GLACIER_MAINNET_BLOCK:
+            TargetVM = eth.vm.forks.arrow_glacier.ArrowGlacierVM
+        elif block_number < 15537394:
+            TargetVM = eth.vm.forks.gray_glacier.GrayGlacierVM
+        else:
+            TargetVM = ParisVM
+
+    elif chain_id == 11155111: # sepolia
         TargetVM = eth.vm.forks.london.LondonVM
-    elif block_number < eth.chains.mainnet.constants.GRAY_GLACIER_MAINNET_BLOCK:
-        TargetVM = eth.vm.forks.arrow_glacier.ArrowGlacierVM
-    elif block_number < 15537394:
-        TargetVM = eth.vm.forks.gray_glacier.GrayGlacierVM
-    else:
-        TargetVM = ParisVM
 
     TargetStateClass = TargetVM.get_state_class()
     TargetAccountDBClass = TargetStateClass.get_account_db_class()

@@ -35,8 +35,8 @@ def get_w3_provider(web3_host):
 
 
 def get_evm(w3, block_number, myhook):
-    VMClass = get_vm_for_block(block_number, myhook)
-    
+    VMClass = get_vm_for_block(w3.eth.chain_id, block_number, myhook)
+
     db = MyChainDB(AtomicDB(StubMemoryDB(w3)))
 
     vm = VMClass(
@@ -86,6 +86,14 @@ def get_chainid(chain_name):
         return 11155111
     else:
         raise Exception("Unknown chain name")
+
+def get_chain_name(id):
+    if id == 1:
+        return "mainnet"
+    elif id == 11155111:
+        return "sepolia"
+    else:
+        raise Exception("Unknown chain id")
 
 class CallFrame():
     def __init__(self, address, msg_sender, tx_origin, value, calltype, callsite):
@@ -550,7 +558,7 @@ if __name__ == "__main__":
     
     # parse optional argument
     parser.add_argument("--txid", help="address of the smart contract we are debugging", default=None)
-    parser.add_argument("--chain", help="chain name", default="mainnet")
+    parser.add_argument("--chain", help="chain name", default=None)
     parser.add_argument("--chainrpc", help="url to connect to geth (infura or private)", default=DEFAULT_CHAINRPC)
     
     parser.add_argument("--target", help="address of the smart contract we are debugging", default=None)
@@ -583,13 +591,19 @@ if __name__ == "__main__":
             sys.exit(1) 
         else:
             tx_data = w3.eth.get_transaction(args.txid)
-            target = tx_data['to']
+            target = tx_data.get('to', None)
             calldata = tx_data['input'][2:]
             block = tx_data['blockNumber']
-            
-            if int(tx_data['chainId'],16) != get_chainid(chain):
-                print("The provided chainid is different from the chainid of the transaction you are trying to debug")
-                sys.exit(1)
+            chain_id = tx_data.get('chainId', hex(w3.eth.chain_id))
+
+            if args.chain is not None:
+                if int(chain_id,16) != get_chainid(chain):
+                    print("The provided chainid is different from the chainid of the transaction you are trying to debug")
+                    sys.exit(1)
+                else:
+                    chain = get_chain_name(chain_id)
+            else:
+                chain = get_chain_name(w3.eth.chain_id)
 
     ethdbgshell = EthDbgShell(ethdbg_conf, w3, chain, chainrpc, block_ref, target, calldata)
     ethdbgshell.cmdloop()
