@@ -15,13 +15,20 @@ DEFAULT_BLOCK = "last"
 DEFAULT_CHAINRPC = "ws://172.17.0.1:8546"
 
 def get_w3_provider(web3_host):
-    provider = web3.WebsocketProvider(
-        web3_host,
-        websocket_timeout=60 * 5,
-        websocket_kwargs={
-            'max_size': 1024 * 1024 * 1024,
-        },
-    )
+    if web3_host.startswith('http'):
+        provider = web3.HTTPProvider(
+            web3_host,
+        )
+    elif web3_host.startswith('ws'):
+        provider = web3.WebsocketProvider(
+            web3_host,
+            websocket_timeout=60 * 5,
+            websocket_kwargs={
+                'max_size': 1024 * 1024 * 1024,
+            },
+        )
+    else:
+        raise Exception("Unknown web3 provider")
     w3 = web3.Web3(provider)
     assert w3.is_connected()
     return w3
