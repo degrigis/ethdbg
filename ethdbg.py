@@ -239,7 +239,11 @@ class EthDbgShell(cmd.Cmd):
 
     def do_storageat(self, arg):
         if arg:
-            print(f'{self.w3.eth.get_storage_at(self.target, arg).hex()}')
+            try:
+                print(f'{self.w3.eth.get_storage_at(self.target, arg).hex()}')
+            except Exception as e:
+                print("Something went wrong while fetching storage:")
+                print(f' Error: {RED_COLOR}{e}{RESET_COLOR}')
         else:
             print("Usage: storageat <slot>")
 
@@ -434,12 +438,12 @@ class EthDbgShell(cmd.Cmd):
                     except UnicodeDecodeError:
                         pass      
                 if entry_val_str != '':
-                    _stack += f'| {hex(entry_slot)} | 0x{entry_val}  {entry_val_str!r}\n'
+                    _stack += f'{hex(entry_slot)}│ 0x{entry_val}  {entry_val_str!r}\n'
                 else:
-                    _stack += f'| {hex(entry_slot)} | 0x{entry_val}\n'
+                    _stack += f'{hex(entry_slot)}│ 0x{entry_val}\n'
             else:
                 # it's an int
-                _stack += f'| {hex(entry_slot)} | {hex(entry_val)}\n'
+                _stack += f'{hex(entry_slot)}│ {hex(entry_val)}\n'
 
         return title + _stack
 
