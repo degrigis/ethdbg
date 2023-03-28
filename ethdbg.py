@@ -5,6 +5,7 @@ import argparse
 import configparser
 import os
 import sys
+import sha3 
 
 from evm import *
 from utils import *
@@ -200,6 +201,12 @@ class EthDbgShell(cmd.Cmd):
         except Exception:
             print(f'Invalid hex string')
 
+    def do_funcid(self, arg):
+        arg = arg.encode('utf-8')
+        k = sha3.keccak_256()
+        k.update(arg)
+        print("Function signature: 0x{}".format(k.hexdigest()[0:8]))
+        
     def do_value(self, arg):
         if arg and not self.started:
             self.value = arg
