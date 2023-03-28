@@ -109,7 +109,7 @@ class CallFrame():
 
 class EthDbgShell(cmd.Cmd):
 
-    intro = 'Welcome to the ethdbg shell. Type help or ? to list commands.\n'
+    intro = '\nType help or ? to list commands.\n'
     prompt = f'{RED_COLOR}ethdbg{RESET_COLOR}➤ '
 
     def __init__(self, ethdbg_conf, w3, chain, chainrpc, block, target, calldata):
@@ -234,7 +234,7 @@ class EthDbgShell(cmd.Cmd):
             storage_view = self._get_storage()
             print(storage_view)
         else:
-            quick_view = self._get_quick_view()
+            quick_view = self._get_quick_view(arg)
 
     def do_maxPriorityFeePerGas(self, arg):
         if arg and not self.started:
@@ -515,7 +515,7 @@ class EthDbgShell(cmd.Cmd):
 
         return title + legend + _sload_log + _sstore_log
 
-    def _get_quick_view(self):
+    def _get_quick_view(self, arg):
         # print the current configuration of EthDebugger
         message = f"{GREEN_COLOR}Quick View{RESET_COLOR}"
         fill = HORIZONTAL_LINE
@@ -523,7 +523,10 @@ class EthDbgShell(cmd.Cmd):
         width = max(self.tty_columns,0)
 
         title = f'{message:{fill}{align}{width}}'
-        print(title)
+        
+        if arg != 'init':
+            print(title)
+        
         # print the chain context and the transaction context
         print(f'Account: {YELLOW_COLOR}{self.account.address}{RESET_COLOR} | Target Contract: {YELLOW_COLOR}{self.target}{RESET_COLOR}') 
         print(f'Chain: {self.chain} | ChainRPC: {self.chainrpc} | Block Number: {self.block}')
@@ -654,9 +657,12 @@ class EthDbgShell(cmd.Cmd):
 
         opcode(computation=computation)
 
-
-
-
+    def print_license(self):
+        print(f"{YELLOW_COLOR}⧫ {BOLD_TEXT}ethdbg 0.1 ⧫ - The CLI Ethereum Debugger{RESET_COLOR}")
+        print("License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>")
+        print("This is free software: you are free to change and redistribute it.")
+        print("There is NO WARRANTY, to the extent permitted by law.\n")
+        
 # We require a .ethdbg config file in ~/.ethdbg
 # This will pull the account to use for the transaction and related private key
 if __name__ == "__main__":
@@ -718,6 +724,7 @@ if __name__ == "__main__":
     
     while True:
         try:
+            ethdbgshell.print_license()
             ethdbgshell.cmdloop()
         except ExitCmdException:
             print("Program terminated.")

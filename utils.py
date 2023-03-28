@@ -10,6 +10,7 @@ CYAN_COLOR = "\033[36m"
 PURPLE_COLOR = "\033[35m"
 RESET_COLOR = "\033[0m"
 HORIZONTAL_LINE  = "\u2500"
+BOLD_TEXT = "\033[1m"
 
 def get_terminal_size():
     """Return the current terminal size."""
