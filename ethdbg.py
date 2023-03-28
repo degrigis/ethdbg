@@ -85,7 +85,7 @@ def get_chainid(chain_name):
     elif chain_name == "sepolia":
         return 11155111
     else:
-        raise Exception("Unknown chain name")
+        raise Exception(f"Unknown chain name {chain_name}")
 
 def get_chain_name(id):
     if id == 1:
@@ -383,7 +383,7 @@ class EthDbgShell(cmd.Cmd):
         gas_used = self.comp.get_gas_used()
         gas_limit = self.comp.state.gas_limit
 
-        _metadata = f'Current Code Account: {curr_account_code} | Current Storage Account: {curr_account_storage}\n'
+        _metadata = f'Current Code Account: {YELLOW_COLOR}{curr_account_code}{RESET_COLOR} | Current Storage Account: {YELLOW_COLOR}{curr_account_storage}{RESET_COLOR}\n'
         _metadata += f'Balance: {curr_balance} wei | Gas Remaining: {gas_remaining} | Gas Used: {gas_used} | Gas Limit: {gas_limit}'
 
         return title + _metadata
@@ -419,23 +419,33 @@ class EthDbgShell(cmd.Cmd):
         return title + _stack
 
     def _get_storage(self):
-        message = f"{GREEN_COLOR}Read Storage Slots{RESET_COLOR}"
+        message = f"{GREEN_COLOR}Active Storage Slots{RESET_COLOR}"
 
         fill = HORIZONTAL_LINE
         align = '<'
         width = max(self.tty_columns,0)
 
         title = f'{message:{fill}{align}{width}}'+'\n'
-
+        legend = f'[ Legend: Slot Address -> Value ]\n'
+        
         # Iterate over sloads for this account
         _sload_log = ''
         ref_account = '0x' + self.comp.msg.storage_address.hex()
         if ref_account in self.sloads:
             ref_account_sloads = self.sloads[ref_account]
             for slot, val in ref_account_sloads.items():
-                _sload_log += f'{slot} -> {hex(val)}\n'
+                _sload_log += f'{CYAN_COLOR}[r]{RESET_COLOR} {slot} -> {hex(val)}\n'
 
-        return title + _sload_log
+        # Iterate over sstore for this account
+        _sstore_log = ''
+        ref_account = '0x' + self.comp.msg.storage_address.hex()
+        if ref_account in self.sstores:
+            ref_account_sstores = self.sstores[ref_account]
+            for slot, val in ref_account_sstores.items():
+                _sstore_log += f'{YELLOW_COLOR}[w]{RESET_COLOR} {slot} -> {hex(val)}\n'
+
+
+        return title + legend + _sload_log + _sstore_log
 
     def _display_context(self, cmdloop=True):
         callstack_view = self._get_callstack()
@@ -463,6 +473,10 @@ class EthDbgShell(cmd.Cmd):
         _opcode_str = f'{hex(computation.code.program_counter)} {opcode.mnemonic}'
         if self.log_op:
             print(_opcode_str)
+
+        if 'PUSH' in opcode.mnemonic:
+            # computation.code.read(1)
+            import ipdb; ipdb.set_trace()
 
         self.history.append(_opcode_str)
 
@@ -556,7 +570,7 @@ if __name__ == "__main__":
 
     # parse optional argument
     parser.add_argument("--txid", help="address of the smart contract we are debugging", default=None)
-    parser.add_argument("--chain", help="chain name", default=None)
+    parser.add_argument("--chain", help="chain name", default="mainnet")
     parser.add_argument("--chainrpc", help="url to connect to geth (infura or private)", default=DEFAULT_CHAINRPC)
 
     parser.add_argument("--target", help="address of the smart contract we are debugging", default=None)
@@ -593,9 +607,9 @@ if __name__ == "__main__":
             calldata = tx_data['input'][2:]
             block = tx_data['blockNumber']
             chain_id = tx_data.get('chainId', hex(w3.eth.chain_id))
-
+            
             if args.chain is not None:
-                if int(chain_id,16) != get_chainid(chain):
+                if chain_id != get_chainid(chain):
                     print("The provided chainid is different from the chainid of the transaction you are trying to debug")
                     sys.exit(1)
                 else:

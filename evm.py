@@ -234,7 +234,7 @@ def get_vm_for_block(chain_id, block_number: int, hook: OpcodeHook = None) -> ty
             TargetVM = ParisVM
 
     elif chain_id == 11155111: # sepolia
-        TargetVM = eth.vm.forks.london.LondonVM
+        TargetVM = ParisVM
 
     TargetStateClass = TargetVM.get_state_class()
     TargetAccountDBClass = TargetStateClass.get_account_db_class()

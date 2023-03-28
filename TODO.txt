@@ -12,4 +12,5 @@
 11- import storage layout
 12- support for multiple transactions
 13- visualize history of callstack instead of just the current 
-14- 
+14- Support impersonation of accounts (skip private key check)
+15- Add native binary for crypto to speed up the execution. 
