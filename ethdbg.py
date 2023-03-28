@@ -1,11 +1,12 @@
 
 import cmd
+from hexbytes import HexBytes
 import web3
 import argparse
 import configparser
 import os
 import sys
-import sha3 
+import sha3
 
 from evm import *
 from utils import *
@@ -208,7 +209,7 @@ class EthDbgShell(cmd.Cmd):
         k = sha3.keccak_256()
         k.update(arg)
         print("Function signature: 0x{}".format(k.hexdigest()[0:8]))
-        
+
     def do_value(self, arg):
         if arg and not self.started:
             self.value = int(arg,10)
@@ -220,7 +221,7 @@ class EthDbgShell(cmd.Cmd):
             self.gas = int(arg,10)
         else:
             print(f'{self.gas} wei')
-            
+
     def do_start(self, arg):
         if self.started:
             return
@@ -250,14 +251,14 @@ class EthDbgShell(cmd.Cmd):
 
         origin_callframe = CallFrame(self.target, self.account.address, self.account.address, self.value, "-", "-")
         self.callstack.append(origin_callframe)
-        
+
         self.temp_break = True
-        
+
         receipt, comp = vm.apply_transaction(
             header=header,
             transaction=txn,
         )
-    
+
     def do_context(self, arg):
         if self.started:
             callstack_view = self._get_callstack()
@@ -296,13 +297,13 @@ class EthDbgShell(cmd.Cmd):
             print(f'{int(arg) / 10**18} ETH')
         except Exception:
             print(f'Invalid wei amount')
-    
+
     def do_ethtowei(self, arg):
         try:
             print(f'{float(arg) * 10**18} wei')
         except Exception:
             print(f'Invalid ETH amount')
-    
+
     def do_storageat(self, arg):
         if arg:
             if not self.started:
@@ -316,7 +317,7 @@ class EthDbgShell(cmd.Cmd):
                     print(f'{"0x{:064x}".format(self.comp.state.get_storage(self.comp.msg.storage_address,int(arg,16)))}')
                 except Exception as e:
                     print("Something went wrong while fetching storage:")
-                    print(f' Error: {RED_COLOR}{e}{RESET_COLOR}')   
+                    print(f' Error: {RED_COLOR}{e}{RESET_COLOR}')
         else:
             print("Usage: storageat <slot>")
 
@@ -330,11 +331,14 @@ class EthDbgShell(cmd.Cmd):
             self.breakpoints.add(int(arg,16))
             print(f'Breakpoint set at {arg}')
 
+    do_b = do_break
+
     def do_mbreak(self, arg):
         # TODO mbreak 0x2ab7c0ab9ab47fcf370d13058bfee28f2ec0940c:pc
         if arg:
             self.mnemonic_bps.add(arg.upper())
             print(f'Mnemonic breakpoint set at {arg}')
+    do_mb = do_mbreak
 
     def do_mbreaks(self, arg):
         # Print all the mbreaks
@@ -343,7 +347,7 @@ class EthDbgShell(cmd.Cmd):
 
     def do_ipython(self, arg):
         import IPython; IPython.embed()
-        
+
     @only_when_started
     def do_continue(self, arg):
         self._resume()
@@ -402,7 +406,7 @@ class EthDbgShell(cmd.Cmd):
             header=header,
             transaction=txn,
         )
-    
+
     do_r = do_run
 
     def do_log_op(self, arg):
@@ -436,19 +440,32 @@ class EthDbgShell(cmd.Cmd):
         width = max(self.tty_columns,0)
 
         title = f'{message:{fill}{align}{width}}'+'\n'
-        legend = f'[ Legend: Address | CallType | CallSite | msg.sender ]\n'
 
         calls_view = ''
+        max_call_opcode_length = max(len('CallType'), max(len(call.calltype) for call in self.callstack))
+        max_pc_length = max(len('CallSite'), max(len(call.callsite) for call in self.callstack))
+        calltype_string_legend = 'CallType'.ljust(max_call_opcode_length)
+        callsite_string_legend = 'CallSite'.rjust(max_pc_length)
+        legend = f'{"[ Legend: Address":42} | {calltype_string_legend} | {callsite_string_legend} | {"msg.sender":42} | msg.value ]\n'
         for call in self.callstack[::-1]:
+            color = ''
             if call.calltype == "CALL":
-                calltype_string = f'{PURPLE_COLOR}{call.calltype}{RESET_COLOR}'
+                color = PURPLE_COLOR
+                calltype_string = f'{call.calltype}'
             elif call.calltype == "DELEGATECALL" or call.calltype == "CODECALL":
-                calltype_string = f'{RED_COLOR}{call.calltype}{RESET_COLOR}'
+                color = RED_COLOR
+                calltype_string = f'{call.calltype}'
             elif call.calltype == "STATICCALL":
-                calltype_string = f'{BLUE_COLOR}{call.calltype}{RESET_COLOR}'
+                color = BLUE_COLOR
+                calltype_string = f'{call.calltype}'
+            elif call.calltype == "CREATE":
+                color = ORANGE_COLOR
+                calltype_string = f'{call.calltype}'
             else:
                 calltype_string = f'{call.calltype}'
-            calls_view += call.address + ' | ' + calltype_string + ' | ' + call.callsite + ' | ' + call.msg_sender + '\n'
+            calltype_string = calltype_string.ljust(max_call_opcode_length)
+            callsite_string = call.callsite.rjust(max_pc_length)
+            calls_view += f'{call.address:42} | {color}{calltype_string}{RESET_COLOR} | {callsite_string} | {call.msg_sender:42} | {call.value} \n'
 
         return title + legend + calls_view
 
@@ -515,7 +532,7 @@ class EthDbgShell(cmd.Cmd):
                         # Automatically decode strings if you can :)
                         entry_val_str = bytes.fromhex(entry_val).decode('utf-8')
                     except UnicodeDecodeError:
-                        pass      
+                        pass
                 if entry_val_str != '':
                     _stack += f'{hex(entry_slot)}│ 0x{entry_val}  {entry_val_str!r}\n'
                 else:
@@ -535,7 +552,7 @@ class EthDbgShell(cmd.Cmd):
 
         title = f'{message:{fill}{align}{width}}'+'\n'
         legend = f'[ Legend: Slot Address -> Value ]\n'
-        
+
         # Iterate over sloads for this account
         _sload_log = ''
         ref_account = '0x' + self.comp.msg.storage_address.hex()
@@ -563,24 +580,24 @@ class EthDbgShell(cmd.Cmd):
         width = max(self.tty_columns,0)
 
         title = f'{message:{fill}{align}{width}}'
-        
+
         if arg != 'init':
             print(title)
-        
+
         # print the chain context and the transaction context
-        print(f'Account: {YELLOW_COLOR}{self.account.address}{RESET_COLOR} | Target Contract: {YELLOW_COLOR}{self.target}{RESET_COLOR}') 
+        print(f'Account: {YELLOW_COLOR}{self.account.address}{RESET_COLOR} | Target Contract: {YELLOW_COLOR}{self.target}{RESET_COLOR}')
         print(f'Chain: {self.chain} | ChainRPC: {self.chainrpc} | Block Number: {self.block}')
         print(f'Value: {self.value} | Gas: {self.gas} | maxPriorityFeePerGas: {self.maxPriorityFeePerGas} | maxFeePerGas: {self.maxFeePerGas}')
-        
+
     def _display_context(self, cmdloop=True):
-        callstack_view = self._get_callstack()
-        print(callstack_view)
-        disass_view = self._get_disass()
-        print(disass_view)
         metadata_view = self._get_metadata()
         print(metadata_view)
+        disass_view = self._get_disass()
+        print(disass_view)
         stack_view = self._get_stack()
         print(stack_view)
+        callstack_view = self._get_callstack()
+        print(callstack_view)
         storage_view = self._get_storage()
         print(storage_view)
 
@@ -594,7 +611,7 @@ class EthDbgShell(cmd.Cmd):
         # Store a reference to the computation to make it
         # accessible to the comamnds
         self.comp = computation
-        
+
         _opcode_str = f'{hex(computation.code.program_counter)} {opcode.mnemonic}'
         if self.log_op:
             print(_opcode_str)
@@ -603,7 +620,7 @@ class EthDbgShell(cmd.Cmd):
             push_amount = int(opcode.mnemonic.split("PUSH")[1])
             push_constant = computation.code.peek()
             _opcode_str += ' '+hex(push_constant)
-            
+
         self.history.append(_opcode_str)
 
         # BREAKPOINT MANAGEMENT
@@ -617,7 +634,7 @@ class EthDbgShell(cmd.Cmd):
 
         if opcode.mnemonic == "SSTORE":
             ref_account = '0x' + computation.msg.storage_address.hex()
-            
+
             slot_id = computation._stack.values[-1]
 
             if slot_id[0] == bytes:
@@ -631,7 +648,7 @@ class EthDbgShell(cmd.Cmd):
                 slot_val = '0x' + slot_val[1].hex()
             else:
                 slot_val = slot_val[1]
-                
+
 
             if ref_account not in self.sstores.keys():
                 self.sstores[ref_account] = {}
@@ -669,11 +686,7 @@ class EthDbgShell(cmd.Cmd):
                 else:
                     contract_target = hex(contract_target[1])
 
-                value_sent = computation._stack.values[-3]
-                if value_sent[0] == bytes:
-                    value_sent = value_sent[1].hex()
-                else:
-                    value_sent = hex(value_sent[1])
+                value_sent = HexBytes(computation._stack.values[-3][1]).hex()
 
                 # We gotta parse the callstack according to the *CALL opcode
                 new_callframe = CallFrame(
@@ -685,6 +698,21 @@ class EthDbgShell(cmd.Cmd):
                                         hex(computation.code.program_counter)
                                         )
                 self.callstack.append(new_callframe)
+
+            elif opcode.mnemonic == "CREATE":
+                contract_value = HexBytes(computation._stack.values[-1][1]).hex()
+                code_offset = HexBytes(computation._stack.values[-2][1]).hex()
+                code_size = HexBytes(computation._stack.values[-3][1]).hex()
+                new_callframe = CallFrame(
+                    '0x' + '0' * 40,
+                    '0x' + computation.msg.code_address.hex(),
+                    '0x' + computation.transaction_context.origin.hex(),
+                    contract_value,
+                    "CREATE",
+                    hex(computation.code.program_counter)
+                )
+                self.callstack.append(new_callframe)
+
 
             else:
                 print(f"Plz add support for {opcode.mnemonic}")
@@ -708,7 +736,7 @@ class EthDbgShell(cmd.Cmd):
         print("License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>")
         print("This is free software: you are free to change and redistribute it.")
         print("There is NO WARRANTY, to the extent permitted by law.\n")
-        
+
 # We require a .ethdbg config file in ~/.ethdbg
 # This will pull the account to use for the transaction and related private key
 if __name__ == "__main__":
@@ -756,7 +784,7 @@ if __name__ == "__main__":
             calldata = tx_data['input'][2:]
             block = tx_data['blockNumber']
             chain_id = tx_data.get('chainId', hex(w3.eth.chain_id))
-            
+
             if args.chain is not None:
                 if chain_id != get_chainid(chain):
                     print("The provided chainid is different from the chainid of the transaction you are trying to debug")
@@ -768,9 +796,9 @@ if __name__ == "__main__":
 
     ethdbgshell = EthDbgShell(ethdbg_conf, w3, chain, chainrpc, block_ref, target, calldata)
     ethdbgshell.print_license()
-    
+
     while True:
-        try:        
+        try:
             ethdbgshell.cmdloop()
         except ExitCmdException:
             print("Program terminated.")

@@ -43,7 +43,7 @@ import eth_account.signers.local
 
 OpcodeHook = typing.Callable[[Opcode, ComputationAPI], typing.Any]
 
-CALL_OPCODES = ['CALL', 'CALLCODE', 'DELEGATECALL', 'STATICCALL']
+CALL_OPCODES = ['CALL', 'CALLCODE', 'DELEGATECALL', 'STATICCALL', 'CREATE', 'CREATE2']
 RETURN_OPCODES = ['RETURN', 'REVERT']
 
 # STUBS
