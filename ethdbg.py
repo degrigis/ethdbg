@@ -192,6 +192,14 @@ class EthDbgShell(cmd.Cmd):
         else:
             print(f'{self.target}')
 
+    def do_hextostr(self, arg):
+        if '0x' in arg:
+            arg = arg.replace('0x','')
+        try:
+            print(f'"{bytes.fromhex(arg).decode("utf-8")}"')
+        except Exception:
+            print(f'Invalid hex string')
+
     def do_value(self, arg):
         if arg and not self.started:
             self.value = arg
