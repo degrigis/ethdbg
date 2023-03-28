@@ -220,6 +220,43 @@ class EthDbgShell(cmd.Cmd):
             self.gas = int(arg,10)
         else:
             print(f'{self.gas} wei')
+            
+    def do_start(self, arg):
+        if self.started:
+            return
+        if self.target == "0x0":
+            print("No target set. Use 'target' command to set it.")
+            return
+        if self.calldata == '' and self.started == False:
+            print("No calldata set. Proceeding with empty calldata.")
+
+        vm, header = get_evm(self.w3, self.block, self._myhook)
+
+        txn = get_txn(self.ethdbg_conf['user.account']['pk'],
+                      get_chainid(self.chain),
+                      self.calldata,
+                      self.gas,
+                      self.maxPriorityFeePerGas,
+                      self.maxFeePerGas,
+                      self.w3.eth.get_transaction_count(self.ethdbg_conf['user.account']['address']),
+                      self.value,
+                      self.target)
+
+        raw_txn = bytes(self.account.sign_transaction(txn).rawTransaction)
+
+        txn = vm.get_transaction_builder().decode(raw_txn)
+
+        self.started = True
+
+        origin_callframe = CallFrame(self.target, self.account.address, self.account.address, self.value, "-", "-")
+        self.callstack.append(origin_callframe)
+        
+        self.temp_break = True
+        
+        receipt, comp = vm.apply_transaction(
+            header=header,
+            transaction=txn,
+        )
     
     def do_context(self, arg):
         if self.started:
@@ -331,7 +368,7 @@ class EthDbgShell(cmd.Cmd):
             self.breakpoints.remove(int(arg,16))
             print(f'Breakpoint cleared at {arg}')
 
-    def do_start(self, arg):
+    def do_run(self, arg):
         if self.started:
             return
         if self.target == "0x0":
@@ -365,6 +402,8 @@ class EthDbgShell(cmd.Cmd):
             header=header,
             transaction=txn,
         )
+    
+    do_r = do_run
 
     def do_log_op(self, arg):
         self.log_op = not self.log_op
