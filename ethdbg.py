@@ -294,6 +294,7 @@ class EthDbgShell(cmd.Cmd):
             print(f'Breakpoint set at {arg}')
 
     def do_mbreak(self, arg):
+        # TODO mbreak 0x2ab7c0ab9ab47fcf370d13058bfee28f2ec0940c:pc
         if arg:
             self.mnemonic_bps.add(arg.upper())
             print(f'Mnemonic breakpoint set at {arg}')
