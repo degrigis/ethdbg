@@ -180,6 +180,8 @@ class EthDbgShell(cmd.Cmd):
         print(f'{self.chain}@{self.block}:{self.chainrpc}')
 
     def do_block(self, arg):
+        if arg and not self.started:
+            self.block = arg
         print(f'{self.block}')
 
     def do_account(self, arg):
@@ -218,6 +220,21 @@ class EthDbgShell(cmd.Cmd):
             self.gas = arg
         else:
             print(f'{self.gas} wei')
+    
+    def do_context(self, arg):
+        if self.started:
+            callstack_view = self._get_callstack()
+            print(callstack_view)
+            disass_view = self._get_disass()
+            print(disass_view)
+            metadata_view = self._get_metadata()
+            print(metadata_view)
+            stack_view = self._get_stack()
+            print(stack_view)
+            storage_view = self._get_storage()
+            print(storage_view)
+        else:
+            quick_view = self._get_quick_view()
 
     def do_maxPriorityFeePerGas(self, arg):
         if arg and not self.started:
@@ -237,13 +254,32 @@ class EthDbgShell(cmd.Cmd):
         else:
             print(f'{self.calldata}')
 
+    def do_weitoeth(self, arg):
+        try:
+            print(f'{int(arg) / 10**18} ETH')
+        except Exception:
+            print(f'Invalid wei amount')
+    
+    def do_ethtowei(self, arg):
+        try:
+            print(f'{float(arg) * 10**18} wei')
+        except Exception:
+            print(f'Invalid ETH amount')
+    
     def do_storageat(self, arg):
         if arg:
-            try:
-                print(f'{self.w3.eth.get_storage_at(self.target, arg).hex()}')
-            except Exception as e:
-                print("Something went wrong while fetching storage:")
-                print(f' Error: {RED_COLOR}{e}{RESET_COLOR}')
+            if not self.started:
+                try:
+                    print(f'{self.w3.eth.get_storage_at(self.target, arg).hex()}')
+                except Exception as e:
+                    print("Something went wrong while fetching storage:")
+                    print(f' Error: {RED_COLOR}{e}{RESET_COLOR}')
+            else:
+                try:
+                    print(f'{"0x{:064x}".format(self.comp.state.get_storage(self.comp.msg.storage_address,int(arg,16)))}')
+                except Exception as e:
+                    print("Something went wrong while fetching storage:")
+                    print(f' Error: {RED_COLOR}{e}{RESET_COLOR}')   
         else:
             print("Usage: storageat <slot>")
 
@@ -267,6 +303,9 @@ class EthDbgShell(cmd.Cmd):
         for b_idx, b in enumerate(self.mnemonic_bps):
             print(f'Mnemonic breakpoint {b_idx} at {b}')
 
+    def do_ipython(self, arg):
+        import IPython; IPython.embed()
+        
     @only_when_started
     def do_continue(self, arg):
         self._resume()
@@ -463,7 +502,7 @@ class EthDbgShell(cmd.Cmd):
         if ref_account in self.sloads:
             ref_account_sloads = self.sloads[ref_account]
             for slot, val in ref_account_sloads.items():
-                _sload_log += f'{CYAN_COLOR}[r]{RESET_COLOR} {slot} -> {hex(val)}\n'
+                _sload_log += f'{CYAN_COLOR}[r]{RESET_COLOR} {slot} -> {val}\n'
 
         # Iterate over sstore for this account
         _sstore_log = ''
@@ -471,11 +510,25 @@ class EthDbgShell(cmd.Cmd):
         if ref_account in self.sstores:
             ref_account_sstores = self.sstores[ref_account]
             for slot, val in ref_account_sstores.items():
-                _sstore_log += f'{YELLOW_COLOR}[w]{RESET_COLOR} {slot} -> {hex(val)}\n'
+                _sstore_log += f'{YELLOW_COLOR}[w]{RESET_COLOR} {slot} -> {val}\n'
 
 
         return title + legend + _sload_log + _sstore_log
 
+    def _get_quick_view(self):
+        # print the current configuration of EthDebugger
+        message = f"{GREEN_COLOR}Quick View{RESET_COLOR}"
+        fill = HORIZONTAL_LINE
+        align = '<'
+        width = max(self.tty_columns,0)
+
+        title = f'{message:{fill}{align}{width}}'
+        print(title)
+        # print the chain context and the transaction context
+        print(f'Account: {YELLOW_COLOR}{self.account.address}{RESET_COLOR} | Target Contract: {YELLOW_COLOR}{self.target}{RESET_COLOR}') 
+        print(f'Chain: {self.chain} | ChainRPC: {self.chainrpc} | Block Number: {self.block}')
+        print(f'Value: {self.value} | Gas: {self.gas} | maxPriorityFeePerGas: {self.maxPriorityFeePerGas} | maxFeePerGas: {self.maxFeePerGas}')
+        
     def _display_context(self, cmdloop=True):
         callstack_view = self._get_callstack()
         print(callstack_view)
@@ -498,7 +551,7 @@ class EthDbgShell(cmd.Cmd):
         # Store a reference to the computation to make it
         # accessible to the comamnds
         self.comp = computation
-
+        
         _opcode_str = f'{hex(computation.code.program_counter)} {opcode.mnemonic}'
         if self.log_op:
             print(_opcode_str)
@@ -521,8 +574,21 @@ class EthDbgShell(cmd.Cmd):
 
         if opcode.mnemonic == "SSTORE":
             ref_account = '0x' + computation.msg.storage_address.hex()
-            slot_id = 0
-            slot_val = 0
+            
+            slot_id = computation._stack.values[-1]
+
+            if slot_id[0] == bytes:
+                slot_id = '0x' + slot_id[1].hex()
+            else:
+                slot_id = hex(slot_id[1])
+
+            slot_val = computation._stack.values[-2]
+
+            if slot_val[0] == bytes:
+                slot_val = '0x' + slot_val[1].hex()
+            else:
+                slot_val = slot_val[1]
+                
 
             if ref_account not in self.sstores.keys():
                 self.sstores[ref_account] = {}
@@ -582,7 +648,8 @@ class EthDbgShell(cmd.Cmd):
 
         if opcode.mnemonic in RETURN_OPCODES:
             if opcode.mnemonic == "REVERT":
-                print(f'{YELLOW_COLOR}>>>Execution Reverted at {computation.msg.code_address.hex()}@{hex(computation.code.program_counter)}<<<{RESET_COLOR}')
+                print(f'{YELLOW_COLOR}>>>Execution Reverted at 0x{computation.msg.code_address.hex()}@{hex(computation.code.program_counter)}<<<{RESET_COLOR}')
+                self._display_context()
             self.callstack.pop()
 
         opcode(computation=computation)
