@@ -361,8 +361,10 @@ class EthDbgShell(cmd.Cmd):
                 calltype_string = f'{PURPLE_COLOR}{call.calltype}{RESET_COLOR}'
             elif call.calltype == "DELEGATECALL" or call.calltype == "CODECALL":
                 calltype_string = f'{RED_COLOR}{call.calltype}{RESET_COLOR}'
-            else:
+            elif call.calltype == "STATICCALL":
                 calltype_string = f'{BLUE_COLOR}{call.calltype}{RESET_COLOR}'
+            else:
+                calltype_string = f'{call.calltype}'
             calls_view += call.address + ' | ' + calltype_string + ' | ' + call.callsite + ' | ' + call.msg_sender + '\n'
 
         return title + legend + calls_view
@@ -409,7 +411,7 @@ class EthDbgShell(cmd.Cmd):
 
         return title + _metadata
 
-    def _get_stack(self):
+    def _get_stack(self, attempt_decode=False):
         message = f"{GREEN_COLOR}Stack {RESET_COLOR}"
 
         fill = HORIZONTAL_LINE
@@ -424,11 +426,13 @@ class EthDbgShell(cmd.Cmd):
             entry_val = entry[1]
             if entry_type == bytes:
                 entry_val = entry_val.hex()
-                try:
-                    # Automatically decode strings if you can :)
-                    entry_val_str = bytes.fromhex(entry_val).decode('utf-8')
-                except UnicodeDecodeError:
-                    entry_val_str = ''
+                entry_val_str = ''
+                if attempt_decode:
+                    try:
+                        # Automatically decode strings if you can :)
+                        entry_val_str = bytes.fromhex(entry_val).decode('utf-8')
+                    except UnicodeDecodeError:
+                        pass      
                 if entry_val_str != '':
                     _stack += f'| {hex(entry_slot)} | 0x{entry_val}  {entry_val_str!r}\n'
                 else:

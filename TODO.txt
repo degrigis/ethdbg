@@ -14,3 +14,4 @@
 13- visualize history of callstack instead of just the current 
 14- Support impersonation of accounts (skip private key check)
 15- Add native binary for crypto to speed up the execution. 
+16- Support break by specifying the contract in which you should be
