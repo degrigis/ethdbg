@@ -46,7 +46,7 @@ OpcodeHook = typing.Callable[[Opcode, ComputationAPI], typing.Any]
 CALL_OPCODES = ['CALL', 'CALLCODE', 'DELEGATECALL', 'STATICCALL']
 RETURN_OPCODES = ['RETURN', 'REVERT']
 
-# STUBS 
+# STUBS
 # ============================
 class StubChainContext:
     """only useful to specify chain id"""
@@ -197,7 +197,6 @@ def build_block_header(w3: web3.Web3, block_number: int) -> BlockHeader:
                 if key_snake in BlockHeader._meta.field_names:
                     block_kwargs[key_snake] = value
 
-            import ipdb; ipdb.set_trace()
             header = BlockHeader(
                 block_number=block_number,
                 **block_kwargs
@@ -247,7 +246,7 @@ def get_vm_for_block(chain_id, block_number: int, hook: OpcodeHook = None) -> ty
         most code copy+pasted from pyevm
         """
         called_set_balance = False
-        
+
         def get_code(self, address: Address) -> bytes:
             validate_canonical_address(address, title="Storage Address")
 
@@ -290,7 +289,7 @@ def get_vm_for_block(chain_id, block_number: int, hook: OpcodeHook = None) -> ty
     class MyVM(TargetVM):
         """only used to pass account db stub (via MyStateClass)"""
         _state_class: typing.Type[BaseState] = MyStateClass
-        
+
         # Stub this if you want to skip signature verification.
         def validate_transaction(
             self,
