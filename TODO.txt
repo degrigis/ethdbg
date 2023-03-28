@@ -8,7 +8,6 @@
 7- Integration with ethpwn 
 8- Display constant in disassembly
 9- watchpoints on storage location or memory
-10- fixing SSTOREs
 11- import storage layout
 12- support for multiple transactions
 13- visualize history of callstack instead of just the current 

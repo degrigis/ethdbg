@@ -211,13 +211,13 @@ class EthDbgShell(cmd.Cmd):
         
     def do_value(self, arg):
         if arg and not self.started:
-            self.value = arg
+            self.value = int(arg,10)
         else:
             print(f'{self.value}')
 
     def do_gas(self, arg):
         if arg and not self.started:
-            self.gas = arg
+            self.gas = int(arg,10)
         else:
             print(f'{self.gas} wei')
     
@@ -238,13 +238,13 @@ class EthDbgShell(cmd.Cmd):
 
     def do_maxPriorityFeePerGas(self, arg):
         if arg and not self.started:
-            self.maxPriorityFeePerGas = arg
+            self.maxPriorityFeePerGas = int(arg,10)
         else:
             print(f'{self.maxPriorityFeePerGas} wei')
 
     def do_maxFeePerGas(self, arg):
         if arg and not self.started:
-            self.maxFeePerGas = arg
+            self.maxFeePerGas = int(arg,10)
         else:
             print(f'{self.maxFeePerGas} wei')
 
@@ -502,7 +502,7 @@ class EthDbgShell(cmd.Cmd):
         if ref_account in self.sloads:
             ref_account_sloads = self.sloads[ref_account]
             for slot, val in ref_account_sloads.items():
-                _sload_log += f'{CYAN_COLOR}[r]{RESET_COLOR} {slot} -> {val}\n'
+                _sload_log += f'{CYAN_COLOR}[r]{RESET_COLOR} {slot} -> {hex(val)}\n'
 
         # Iterate over sstore for this account
         _sstore_log = ''
@@ -651,10 +651,16 @@ class EthDbgShell(cmd.Cmd):
 
         if opcode.mnemonic in RETURN_OPCODES:
             if opcode.mnemonic == "REVERT":
-                print(f'{YELLOW_COLOR}>>>Execution Reverted at 0x{computation.msg.code_address.hex()}@{hex(computation.code.program_counter)}<<<{RESET_COLOR}')
+                error = '""'
+                try:
+                    error =  self.comp.error
+                except Exception:
+                    pass
+                print(f'{YELLOW_COLOR}>>> Execution Reverted at 0x{computation.msg.code_address.hex()} | PC: {hex(computation.code.program_counter)} | Message: {error} <<<{RESET_COLOR}')
                 self._display_context()
             self.callstack.pop()
 
+        # Execute the opcode!
         opcode(computation=computation)
 
     def print_license(self):
@@ -721,10 +727,10 @@ if __name__ == "__main__":
                 chain = get_chain_name(w3.eth.chain_id)
 
     ethdbgshell = EthDbgShell(ethdbg_conf, w3, chain, chainrpc, block_ref, target, calldata)
+    ethdbgshell.print_license()
     
     while True:
-        try:
-            ethdbgshell.print_license()
+        try:        
             ethdbgshell.cmdloop()
         except ExitCmdException:
             print("Program terminated.")
