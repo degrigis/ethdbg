@@ -337,7 +337,7 @@ class EthDbgShell(cmd.Cmd):
         for ref_account, sstores in self.sstores.items():
             print(f'Account: {ref_account}:')
             for sstore_slot, sstore_val in sstores.items():
-                print(f' [w] Slot: {sstore_slot} | Value: {sstore_val}')
+                print(f' {YELLOW_COLOR}[w]{RESET_COLOR} Slot: {sstore_slot} | Value: {sstore_val}')
 
     @only_when_started
     def do_sloads(self, arg):
@@ -345,7 +345,7 @@ class EthDbgShell(cmd.Cmd):
         for ref_account, sloads in self.sloads.items():
             print(f'Account: {ref_account}:')
             for sload_slot, sload_val in sloads.items():
-                print(f' [r] Slot: {sload_slot} | Value: {sload_val}')
+                print(f' {CYAN_COLOR}[r]{RESET_COLOR} Slot: {sload_slot} | Value: {hex(sload_val)}')
 
     def do_breaks(self,arg):
         # Print all the breaks
@@ -773,6 +773,7 @@ class EthDbgShell(cmd.Cmd):
 
         # Execute the opcode!
         opcode(computation=computation)
+
 
     def print_license(self):
         print(f"{YELLOW_COLOR}⧫ {BOLD_TEXT}ethdbg 0.1 ⧫ - The CLI Ethereum Debugger{RESET_COLOR}")
