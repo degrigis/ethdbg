@@ -176,6 +176,16 @@ class EthDbgShell(cmd.Cmd):
                 print("You need to start the debugger first. Use 'start' command")
         return wrapper
 
+    def reset_dbg_state(self):
+        self.history = list()
+        self.comp = None
+        self.temp_break = False
+        self.log_op = False
+        self.sstores = {}
+        self.sloads = {}
+        self.callstack = []
+        self.started = False
+
     # COMMANDS
     def do_chain(self, arg):
         print(f'{self.chain}@{self.block}:{self.chainrpc}')
@@ -320,6 +330,22 @@ class EthDbgShell(cmd.Cmd):
                     print(f' Error: {RED_COLOR}{e}{RESET_COLOR}')
         else:
             print("Usage: storageat <slot>")
+    
+    @only_when_started
+    def do_sstores(self, arg):
+        # Displat all the sstores issued during the tx
+        for ref_account, sstores in self.sstores.items():
+            print(f'Account: {ref_account}:')
+            for sstore_slot, sstore_val in sstores.items():
+                print(f' [w] Slot: {sstore_slot} | Value: {sstore_val}')
+
+    @only_when_started
+    def do_sloads(self, arg):
+        # Displat all the sstores issued during the tx
+        for ref_account, sloads in self.sloads.items():
+            print(f'Account: {ref_account}:')
+            for sload_slot, sload_val in sloads.items():
+                print(f' [r] Slot: {sload_slot} | Value: {sload_val}')
 
     def do_breaks(self,arg):
         # Print all the breaks
