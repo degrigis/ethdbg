@@ -3,7 +3,7 @@ from bisect import bisect
 import pyevmasm
 from pyevmasm import assemble, assemble_all, assemble_hex, assemble_one
 from pyevmasm import disassemble, disassemble_all, disassemble_hex, disassemble_one
-from pyevmasm import instruction_tables, london_instruction_table, accepted_forks
+from pyevmasm.evmasm import instruction_tables, london_instruction_table, accepted_forks, InstructionTable, Instruction
 
 
 paris_instruction_table = {0x44: ("PREVRANDAO", 0, 0, 1, 2, "Get the previous blocks Randao random number.")}
