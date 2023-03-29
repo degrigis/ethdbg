@@ -165,7 +165,7 @@ class EthDbgShell(cmd.Cmd):
         self.comp = None
         #  Used for step command
         self.temp_break = False
-        #  Weather we want to display the execute ops
+        #  Whether we want to display the execute ops
         self.log_op = False
 
     def only_when_started(func):

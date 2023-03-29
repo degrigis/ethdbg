@@ -314,5 +314,4 @@ def get_vm_for_block(chain_id, block_number: int, hook: OpcodeHook = None) -> ty
             # override opcode with our hooked one
             MyStateClass.computation_class.opcodes[i] = opcode_cls()
 
-
     return MyVM
