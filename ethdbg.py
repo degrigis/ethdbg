@@ -589,7 +589,8 @@ class EthDbgShell(cmd.Cmd):
         return title + _stack
 
     def _get_storage(self):
-        message = f"{GREEN_COLOR}Active Storage Slots{RESET_COLOR}"
+        ref_account = '0x' + self.comp.msg.storage_address.hex()
+        message = f"{GREEN_COLOR}Active Storage Slots [{ref_account}]{RESET_COLOR}"
 
         fill = HORIZONTAL_LINE
         align = '<'
@@ -600,7 +601,6 @@ class EthDbgShell(cmd.Cmd):
 
         # Iterate over sloads for this account
         _sload_log = ''
-        ref_account = '0x' + self.comp.msg.storage_address.hex()
         if ref_account in self.sloads:
             ref_account_sloads = self.sloads[ref_account]
             for slot, val in ref_account_sloads.items():
