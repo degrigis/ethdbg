@@ -7,6 +7,7 @@ import configparser
 import os
 import sys
 import sha3
+from pyevmasm_fixed import disassemble, disassemble_all, disassemble_hex, disassemble_one, Instruction
 
 from evm import *
 from utils import *
@@ -31,6 +32,7 @@ def get_w3_provider(web3_host):
         )
     else:
         raise Exception("Unknown web3 provider")
+
     w3 = web3.Web3(provider)
     assert w3.is_connected()
     return w3
@@ -129,6 +131,7 @@ class EthDbgShell(cmd.Cmd):
         self.chain = chain
         self.chainrpc = chainrpc
         self.block = block
+        self.fork = None
 
         # Tx context
         self.target = target
@@ -242,6 +245,7 @@ class EthDbgShell(cmd.Cmd):
             print("No calldata set. Proceeding with empty calldata.")
 
         vm, header = get_evm(self.w3, self.block, self._myhook)
+        self.fork = vm.fork
 
         txn = get_txn(self.ethdbg_conf['user.account']['pk'],
                       get_chainid(self.chain),
@@ -408,6 +412,7 @@ class EthDbgShell(cmd.Cmd):
             print("No calldata set. Proceeding with empty calldata.")
 
         vm, header = get_evm(self.w3, self.block, self._myhook)
+        self.fork = vm.fork
 
         txn = get_txn(self.ethdbg_conf['user.account']['pk'],
                       get_chainid(self.chain),
@@ -652,17 +657,22 @@ class EthDbgShell(cmd.Cmd):
         # accessible to the comamnds
         self.comp = computation
 
-        _opcode_str = f'{hex(computation.code.program_counter)} {opcode.mnemonic}'
+        # the computation.code.__iter__() has already incremented the program counter by 1, account for this
+        pc = computation.code.program_counter - 1
+
+        with computation.code.seek(pc):
+            opcode_bytes = computation.code.read(64) # max 32 byte immediate + 32 bytes should be enough, right???
+
+        assert self.fork is not None
+        insn: Instruction = disassemble_one(opcode_bytes, pc=pc, fork=self.fork)
+        assert insn is not None, "64 bytes was not enough to disassemble?? or this is somehow an invalid opcode??"
+        assert insn.mnemonic == opcode.mnemonic, "disassembled opcode does not match the opcode we're currently executing??"
+        hex_bytes = ' '.join(f'{b:02x}' for b in insn.bytes[:5])
+        if insn.size > 5: hex_bytes += ' ...'
+        _opcode_str = f'{insn.pc:#04x}  {hex_bytes:18} {str(insn):20}    // {insn.description}'
+
         if self.log_op:
             print(_opcode_str)
-
-        if 'PUSH' in opcode.mnemonic:
-            push_amount = int(opcode.mnemonic.split("PUSH")[1])
-
-            # the seek context manager automatically resets the program counter afterwards
-            with computation.code.seek(computation.code.program_counter):
-                push_constant = computation.code.read(push_amount)
-            _opcode_str += ' '+HexBytes(push_constant).hex()
 
         self.history.append(_opcode_str)
 
