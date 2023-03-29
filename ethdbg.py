@@ -618,7 +618,10 @@ class EthDbgShell(cmd.Cmd):
 
         if 'PUSH' in opcode.mnemonic:
             push_amount = int(opcode.mnemonic.split("PUSH")[1])
-            push_constant = computation.code.peek()
+
+            # the seek context manager automatically resets the program counter afterwards
+            with computation.code.seek(computation.code.program_counter):
+                push_constant = computation.code.read(push_amount)
             _opcode_str += ' '+hex(push_constant)
 
         self.history.append(_opcode_str)
