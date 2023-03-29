@@ -414,7 +414,21 @@ class EthDbgShell(cmd.Cmd):
         print(f'Logging opcodes: {self.log_op}')
 
     def do_quit(self, arg):
+        print()
         sys.exit()
+
+    def do_EOF(self, arg):
+        print()
+        # quit if user says yes or hits ctrl-d again
+        try:
+            if input(f" {BLUE_COLOR}[+] EOF, are you sure you want to quit? (y/n) {RESET_COLOR}") == 'y':
+                self.do_quit(arg)
+        except EOFError:
+            self.do_quit(arg)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            print()
 
     do_q = do_quit
 
@@ -622,7 +636,7 @@ class EthDbgShell(cmd.Cmd):
             # the seek context manager automatically resets the program counter afterwards
             with computation.code.seek(computation.code.program_counter):
                 push_constant = computation.code.read(push_amount)
-            _opcode_str += ' '+hex(push_constant)
+            _opcode_str += ' '+HexBytes(push_constant).hex()
 
         self.history.append(_opcode_str)
 
