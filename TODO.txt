@@ -11,7 +11,11 @@
 11- import storage layout
 12- support for multiple transactions
 13- visualize history of callstack instead of just the current 
-14- Support impersonation of accounts (skip private key check)
+14- Support impersonation of accounts (skip private key check) (just set the msg.sender to specific address)
 15- Add native binary for crypto to speed up the execution. 
 16- Support break by specifying the contract in which you should be
 17- If execution reverts inside a contract, the sstores should be removed!
+18- When I do start and the computation is done, restart it. If it's not at the end show a prompt!
+19- [BUG] StubMemoryDB is not block aware, I tried to make block aware but then I cannot use my address, what is the best fix? @robert
+20- Support execution of TX from top of block, end, or specific position (more advanced)
+    - Executing always at the top might not work in some cases (balance of tokens for a contract)

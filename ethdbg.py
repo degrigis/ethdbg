@@ -50,9 +50,8 @@ def get_evm(w3, block_number, myhook):
         consensus_context = None,
     )
 
-    old_block = w3.eth.get_block(block_number - 1)
+    old_block = w3.eth.get_block(block_number-1)
     state_root = bytes(old_block['stateRoot'])
-
     header = vm.get_header()
     header = header.copy(gas_used = 0, state_root=state_root)
     execution_context = vm.create_execution_context(
@@ -61,15 +60,14 @@ def get_evm(w3, block_number, myhook):
 
     return vm, header
 
-def get_txn(pk, chainid, calldata, gas, maxPriorityFeePerGas, maxFeePerGas, nonce, value, to):
+def get_txn(pk, chainid, calldata, gas, gasPrice, nonce, value, to):
     account = Account.from_key(pk)
 
     txn: web3.types.TxParams = {
         'chainId':              chainid,
         'data':                 bytes.fromhex(calldata),
         'gas':                  gas,
-        'maxPriorityFeePerGas': maxPriorityFeePerGas,
-        'maxFeePerGas':         maxFeePerGas,
+        'gasPrice':             gasPrice,
         'nonce':                nonce,
         'value':                value,
         'to':                   to
@@ -138,8 +136,7 @@ class EthDbgShell(cmd.Cmd):
         self.value = 0
         self.calldata = calldata if calldata else ''
         self.gas = 6_000_000 # silly default value
-        self.maxPriorityFeePerGas = 0
-        self.maxFeePerGas = 1_000 * (10 ** 9)
+        self.gasPrice = (10 ** 9) * 1000
 
         # The *CALL trace between contracts
         self.callstack = []
@@ -251,13 +248,13 @@ class EthDbgShell(cmd.Cmd):
                       get_chainid(self.chain),
                       self.calldata,
                       self.gas,
-                      self.maxPriorityFeePerGas,
-                      self.maxFeePerGas,
+                      self.gasPrice,
                       self.w3.eth.get_transaction_count(self.ethdbg_conf['user.account']['address']),
                       self.value,
                       self.target)
-
+        
         raw_txn = bytes(self.account.sign_transaction(txn).rawTransaction)
+
 
         txn = vm.get_transaction_builder().decode(raw_txn)
 
@@ -328,7 +325,7 @@ class EthDbgShell(cmd.Cmd):
                     print(f' Error: {RED_COLOR}{e}{RESET_COLOR}')
             else:
                 try:
-                    print(f'{"0x{:064x}".format(self.comp.state.get_storage(self.comp.msg.storage_address,int(arg,16)))}')
+                    print(f'{"0x{:064x}".format(self.comp.state.get_storage(self.comp.msg.storage_address, int(arg,16)))}')
                 except Exception as e:
                     print("Something went wrong while fetching storage:")
                     print(f' Error: {RED_COLOR}{e}{RESET_COLOR}')
@@ -418,8 +415,7 @@ class EthDbgShell(cmd.Cmd):
                       get_chainid(self.chain),
                       self.calldata,
                       self.gas,
-                      self.maxPriorityFeePerGas,
-                      self.maxFeePerGas,
+                      self.gasPrice,
                       self.w3.eth.get_transaction_count(self.ethdbg_conf['user.account']['address']),
                       self.value,
                       self.target)
@@ -689,19 +685,10 @@ class EthDbgShell(cmd.Cmd):
             ref_account = '0x' + computation.msg.storage_address.hex()
 
             slot_id = computation._stack.values[-1]
-
-            if slot_id[0] == bytes:
-                slot_id = '0x' + slot_id[1].hex()
-            else:
-                slot_id = hex(slot_id[1])
-
+            slot_id = HexBytes(slot_id[1]).hex()
+            
             slot_val = computation._stack.values[-2]
-
-            if slot_val[0] == bytes:
-                slot_val = '0x' + slot_val[1].hex()
-            else:
-                slot_val = slot_val[1]
-
+            slot_val = HexBytes(slot_val[1]).hex()
 
             if ref_account not in self.sstores.keys():
                 self.sstores[ref_account] = {}
@@ -713,12 +700,8 @@ class EthDbgShell(cmd.Cmd):
             ref_account = '0x' + computation.msg.storage_address.hex()
 
             slot_id = computation._stack.values[-1]
-
-            if slot_id[0] == bytes:
-                slot_id = '0x' + slot_id[1].hex()
-            else:
-                slot_id = hex(slot_id[1])
-
+            slot_id = HexBytes(slot_id[1]).hex()
+            
             # CHECK THIS
             slot_val = computation.state.get_storage(computation.msg.storage_address, int(slot_id,16))
 
@@ -732,14 +715,9 @@ class EthDbgShell(cmd.Cmd):
 
             if opcode.mnemonic == "CALL":
                 contract_target = computation._stack.values[-2]
+                contract_target = HexBytes(contract_target[1]).hex() 
 
-                # FIXME
-                if contract_target[0] == bytes:
-                    contract_target = '0x' + contract_target[1].hex()
-                else:
-                    contract_target = hex(contract_target[1])
-
-                value_sent = HexBytes(computation._stack.values[-3][1]).hex()
+                value_sent = int.from_bytes(HexBytes(computation._stack.values[-3][1]), byteorder='big')
 
                 # We gotta parse the callstack according to the *CALL opcode
                 new_callframe = CallFrame(

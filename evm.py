@@ -246,7 +246,7 @@ def get_vm_for_block(chain_id, block_number: int, hook: OpcodeHook = None) -> ty
         most code copy+pasted from pyevm
         """
         called_set_balance = False
-
+                
         def get_code(self, address: Address) -> bytes:
             validate_canonical_address(address, title="Storage Address")
 
@@ -296,6 +296,10 @@ def get_vm_for_block(chain_id, block_number: int, hook: OpcodeHook = None) -> ty
             transaction: SignedTransactionAPI
         ) -> None:
             return True
+
+        def validate_transaction_against_header(*args, **kwargs):
+            # Never check for gasPrice.
+            pass
 
     if hook is not None:
         # stub opcodes with a hook
