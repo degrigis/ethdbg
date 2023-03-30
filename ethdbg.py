@@ -14,9 +14,7 @@ from evm import *
 from utils import *
 from ethdbg_exceptions import *
 
-# GLOBALS
-DEFAULT_BLOCK = "last"
-DEFAULT_CHAINRPC = "ws://172.17.0.1:8546"
+DEFAULT_NODE_URL = "ws://172.17.0.1:8546"
 
 def get_w3_provider(web3_host):
     if web3_host.startswith('http'):
@@ -61,21 +59,6 @@ def get_evm(w3, block_number, myhook):
 
     return vm, header
 
-def get_txn(pk, chainid, calldata, gas, gasPrice, nonce, value, to):
-    account = Account.from_key(pk)
-
-    txn: web3.types.TxParams = {
-        'chainId':              chainid,
-        'data':                 bytes.fromhex(calldata),
-        'gas':                  gas,
-        'gasPrice':             gasPrice,
-        'nonce':                nonce,
-        'value':                value,
-        'to':                   to
-    }
-
-    return txn
-
 def get_config():
     # Parse file using ConfigParser
     config = configparser.ConfigParser()
@@ -112,6 +95,7 @@ class CallFrame():
 ALLOWED_COND_BPS = ['addr', 'saddr', 'op', 'pc']
 BPS_RE_PATTERN = r"(.*)(==|=|!=|>|<|<=|>=)(.*)"
 ETH_ADDRESS = r'^(0x)?[0-9a-fA-F]{40}$'
+
 
 class Breakpoint():
     def __init__(self, break_args):
@@ -253,13 +237,300 @@ class Breakpoint():
             
             # It's a hit of a conditional bp! 
             return True
-                
+
+class TransactionDebugTarget:
+    def __init__(self, w3) -> None:
+        self.w3: web3.Web3 = w3
+
+        self._defaults = {}
+
+        self._target_address = None
+        self._chain_name = None
+        self._chain_id = None
+        self._fork_name = None
+        self._calldata = None
+        self._block_number = None
+        self._txid = None
+        self._source_address = None
+        self._source_private_key = None
+        self._gas = None
+        self._value = None
+        self._sender = None
+        self._origin = None
+        self._gas_price = None
+        self._max_fee_per_gas = None
+        self._max_priority_fee_per_gas = None
+        self._nonce = None
+
+    def set_default(self, key, value):
+        self._defaults[key] = value
+
+    def set_defaults(self, **defaults):
+        self._defaults.update(**defaults)
+
+    def clear_defaults(self):
+        self._defaults = {}
+
+    @property
+    def nonce(self):
+        return self._nonce if self._nonce is not None else self._defaults.get('nonce', None)
+
+    @nonce.setter
+    def nonce(self, nonce):
+        if nonce is not None:
+            self._nonce = nonce
+
+    @property
+    def source_address(self):
+        return self._source_address if self._source_address is not None else self._defaults.get('source_address', None)
+
+    @source_address.setter
+    def source_address(self, address):
+        if address is not None:
+            self._source_address = self.w3.to_checksum_address(address)
+
+    @property
+    def from_pk(self):
+        return self._source_private_key if self._source_private_key is not None else self._defaults.get('from_pk', None)
+
+    @from_pk.setter
+    def from_pk(self, pk):
+        if pk is not None:
+            self._source_private_key = HexBytes(pk).hex()
+
+    @property
+    def target_address(self):
+        return self._target_address if self._target_address is not None else self._defaults.get('target_address', None)
+
+    @target_address.setter
+    def target_address(self, address):
+        if address is not None:
+            self._target_address = self.w3.to_checksum_address(address)
+
+    @property
+    def calldata(self):
+        return self._calldata if self._calldata is not None else self._defaults.get('calldata', None)
+
+    @calldata.setter
+    def calldata(self, calldata):
+        if calldata is not None:
+            self._calldata = HexBytes(calldata).hex()
+
+    @property
+    def chain(self):
+        return self._chain_name
+
+    @chain.setter
+    def chain(self, chain=None):
+        if chain is None:
+            return
+
+        self._chain_id = None
+        self._chain_name = None
+
+        if type(chain) is int:
+            self.chain_id = chain
+        elif type(chain) is str:
+            self.chain_name = chain
+        else:
+            raise ValueError(f"Unknown chain type: {type(chain)} = {repr(chain)}")
+
+    @property
+    def chain_id(self):
+        return self._chain_id
+
+    @property
+    def chain_name(self):
+        return self._chain_name
+
+    @chain_id.setter
+    def chain_id(self, id):
+        assert type(id) is int
+        assert (self._chain_name is None) or (self._chain_name == get_chain_name(id))
+
+        self._chain_id = id
+        self._chain_name = get_chain_name(id)
+
+    @chain_name.setter
+    def chain_name(self, chain):
+        assert type(chain) is str
+        assert (self._chain_id is None) or (self._chain_id == get_chainid(chain))
+        self._chain_name = chain
+        self._chain_id = get_chainid(chain)
+
+    @property
+    def fork(self):
+        return self._fork_name if self._fork_name is not None else self._defaults.get('fork', None)
+
+    @fork.setter
+    def fork(self, fork):
+        assert self._fork_name is None or self._fork_name == fork
+        if fork is not None:
+            self._fork = fork
+
+    @property
+    def block_number(self):
+        return self._block_number if self._block_number is not None else self._defaults.get('block_number', None)
+
+    @block_number.setter
+    def block_number(self, block_number):
+        if block_number is not None:
+            self._block_number = block_number
+        return self
+
+    @property
+    def transaction_hash(self):
+        return self._txid if self._txid is not None else self._defaults.get('transaction_hash', None)
+
+    @transaction_hash.setter
+    def transaction_hash(self, txid=None):
+        assert self._txid is None or self._txid == txid
+        if txid is not None:
+            self._txid = txid
+
+    @property
+    def gas(self):
+        return self._gas if self._gas is not None else self._defaults.get('gas', None)
+
+    @gas.setter
+    def gas(self, gas=None):
+        assert self._gas is None or self._gas == gas
+        if gas is not None:
+            self._gas = gas
+
+    @property
+    def value(self):
+        return self._value if self._value is not None else self._defaults.get('value', None)
+
+    @value.setter
+    def value(self, value=None):
+        if value is not None:
+            self._value = value
+
+    @property
+    def sender(self):
+        return self._sender if self._sender is not None else self._defaults.get('sender', None)
+
+    @sender.setter
+    def sender(self, sender=None):
+        if sender is not None:
+            self._sender = self.w3.to_checksum_address(sender)
+
+    @property
+    def origin(self):
+        return self._origin if self._origin is not None else self._defaults.get('origin', None)
+
+    @origin.setter
+    def origin(self, origin=None):
+        if origin is not None:
+            self._origin = self.w3.to_checksum_address(origin)
+
+    @property
+    def gas_price(self):
+        return self._gas_price if self._gas_price is not None else self._defaults.get('gas_price', None)
+
+    @gas_price.setter
+    def gas_price(self, gas_price=None):
+        if gas_price is not None:
+            self._gas_price = gas_price
+
+    @property
+    def max_fee_per_gas(self):
+        return self._max_fee_per_gas if self._max_fee_per_gas is not None else self._defaults.get('max_fee_per_gas', None)
+
+    @max_fee_per_gas.setter
+    def max_fee_per_gas(self, max_fee_per_gas=None):
+        if max_fee_per_gas is not None:
+            self._max_fee_per_gas = max_fee_per_gas
+
+    @property
+    def max_priority_fee_per_gas(self):
+        if self._max_priority_fee_per_gas is not None:
+            return self._max_priority_fee_per_gas
+        else:
+            return self._defaults.get('max_priority_fee_per_gas', None)
+
+    @max_priority_fee_per_gas.setter
+    def max_priority_fee_per_gas(self, max_priority_fee_per_gas=None):
+        if max_priority_fee_per_gas is not None:
+            self._max_priority_fee_per_gas = max_priority_fee_per_gas
+
+    def replay_transaction(self, txid, **kwargs) -> 'TransactionDebugTarget':
+        assert txid is not None
+        txid = HexBytes(txid).hex()
+
+        tx_data = self.w3.eth.get_transaction(txid)
+        self.transaction_hash = txid
+
+        self.defaults = {
+            'block_number': self.w3.eth.block_number,
+            'chain_id': self.w3.eth.chain_id,
+        }
+
+        # TODO pull default account and private key from ethpwn
+        self.target_address = kwargs.pop('to', None) or tx_data.get('to', None)
+        self.source_address = kwargs.pop('from', None) or tx_data.get('from', None)
+        self.calldata = kwargs.pop('calldata', None) or kwargs.pop('input', None) or tx_data.get('input', None)
+
+        for k, v in tx_data.items():
+            k_snake = to_snake_case(k)
+            value = kwargs.pop(k_snake, None) or kwargs.pop(k, None) or v
+            try:
+                setattr(self, k_snake, value)
+            except AttributeError:
+                pass
+
+        for k, v in kwargs.items():
+            if v is not None:
+                setattr(self, k, v)
+
+        return self
+
+    def new_transaction(self, to, calldata, **kwargs):
+        self.target_address = to
+        self.calldata = calldata
+
+        # TODO pull default account and private key from ethpwn
+        self.source_address = kwargs.pop('from', None)
+        self.block_number = kwargs.pop('block_number', self.w3.eth.block_number)
+        self.chain = kwargs.pop('chain', hex(self.w3.eth.chain_id))
+        self.fork = kwargs.pop('fork', self.w3.eth.fork)
+
+        for k, v in kwargs.items():
+            if v is None:
+                continue
+            try:
+                setattr(self, k, v)
+            except AttributeError:
+                pass
+
+        return self
+
+
+    def get_transaction_dict(self, **defaults):
+        assert self.chain_id is not None
+        assert self.source_address is not None
+        assert self.nonce is not None
+
+        txn: web3.types.TxParams = {
+            'chainId':              self.chain_id,
+            'data':                 HexBytes(self.calldata),
+            'gas':                  self.gas,
+            'gasPrice':             self.gas_price,
+            'nonce':                self.nonce,
+            'value':                self.value,
+            'to':                   self.target_address
+        }
+
+        return txn
+
+
 class EthDbgShell(cmd.Cmd):
 
     intro = '\nType help or ? to list commands.\n'
     prompt = f'{RED_COLOR}ethdbg{RESET_COLOR}➤ '
 
-    def __init__(self, ethdbg_conf, w3, chain, chainrpc, block, target, calldata):
+    def __init__(self, ethdbg_conf, w3, debug_target):
         # call the parent class constructor
         super().__init__()
 
@@ -271,18 +542,16 @@ class EthDbgShell(cmd.Cmd):
         # EVM stuff
         self.w3 = w3
 
-        # Chain context
-        self.chain = chain
-        self.chainrpc = chainrpc
-        self.block = block
-        self.fork = None
-
-        # Tx context
-        self.target = target
-        self.value = 0
-        self.calldata = calldata if calldata else ''
-        self.gas = 6_000_000 # silly default value
-        self.gasPrice = (10 ** 9) * 1000
+        self.debug_target: TransactionDebugTarget = debug_target
+        self.debug_target.set_defaults(
+            gas=6_000_000, # silly default value
+            gas_price=(10 ** 9) * 1000,
+            value=0,
+            calldata='',
+            to='0x0',
+            origin=self.account.address,
+            sender=self.account.address,
+        )
 
         # The *CALL trace between contracts
         self.callstack = []
@@ -303,7 +572,7 @@ class EthDbgShell(cmd.Cmd):
         self.started = False
         #  Breakpoints PCs
         self.breakpoints = list()
-        
+
         # Used for finish command
         self.temp_break_finish = False
         self.finish_curr_stack_depth = None
@@ -337,12 +606,12 @@ class EthDbgShell(cmd.Cmd):
 
     # COMMANDS
     def do_chain(self, arg):
-        print(f'{self.chain}@{self.block}:{self.chainrpc}')
+        print(f'{self.debug_target.chain}@{self.debug_target.block_number}:{self.w3.provider.endpoint_uri}')
 
     def do_block(self, arg):
         if arg and not self.started:
-            self.block = arg
-        print(f'{self.block}')
+            self.debug_target.block_number = arg
+        print(f'{self.debug_target.block_number}')
 
     def do_account(self, arg):
         print(f'{self.account.address}')
@@ -351,15 +620,13 @@ class EthDbgShell(cmd.Cmd):
         # Check if there is an argument
         # (as of now, once the target is set, you cannot unset it)
         if arg and not self.started:
-            self.target = arg
+            self.debug_target.target_address = arg
         else:
-            print(f'{self.target}')
+            print(f'{self.debug_target.target_address}')
 
     def do_hextostr(self, arg):
-        if '0x' in arg:
-            arg = arg.replace('0x','')
         try:
-            print(f'"{bytes.fromhex(arg).decode("utf-8")}"')
+            print(f'"{HexBytes(arg).decode("utf-8")}"')
         except Exception:
             print(f'Invalid hex string')
 
@@ -371,15 +638,15 @@ class EthDbgShell(cmd.Cmd):
 
     def do_value(self, arg):
         if arg and not self.started:
-            self.value = int(arg,10)
+            self.debug_target.value = int(arg,10)
         else:
-            print(f'{self.value}')
+            print(f'{self.debug_target.value}')
 
     def do_gas(self, arg):
         if arg and not self.started:
-            self.gas = int(arg,10)
+            self.debug_target.gas = int(arg,10)
         else:
-            print(f'{self.gas} wei')
+            print(f'{self.debug_target.gas} wei')
 
     def do_start(self, arg):
         if self.started:
@@ -387,32 +654,30 @@ class EthDbgShell(cmd.Cmd):
             if answer.lower() == 'y':
                 raise RestartDbgException()
             return
-        if self.target == "0x0":
+        if self.debug_target.target_address == "0x0":
             print("No target set. Use 'target' command to set it.")
             return
-        if self.calldata == '' and self.started == False:
+        if not self.debug_target.calldata and self.started == False:
             print("No calldata set. Proceeding with empty calldata.")
 
-        vm, header = get_evm(self.w3, self.block, self._myhook)
-        self.fork = vm.fork
+        vm, header = get_evm(self.w3, self.debug_target.block_number, self._myhook)
 
-        txn = get_txn(self.ethdbg_conf['user.account']['pk'],
-                      get_chainid(self.chain),
-                      self.calldata,
-                      self.gas,
-                      self.gasPrice,
-                      self.w3.eth.get_transaction_count(self.ethdbg_conf['user.account']['address']),
-                      self.value,
-                      self.target)
-        
+        assert self.debug_target.fork is None or self.debug_target.fork == vm.fork
+        self.debug_target.set_default('fork', vm.fork)
+
+        txn = self.debug_target.get_transaction_dict()
         raw_txn = bytes(self.account.sign_transaction(txn).rawTransaction)
-
-
         txn = vm.get_transaction_builder().decode(raw_txn)
 
         self.started = True
 
-        origin_callframe = CallFrame(self.target, self.account.address, self.account.address, self.value, "-", "-")
+        origin_callframe = CallFrame(
+            self.debug_target.target_address,
+            self.account.address,
+            self.account.address,
+            self.debug_target.value,
+            "-",
+            "-")
         self.callstack.append(origin_callframe)
 
         self.temp_break = True
@@ -439,9 +704,9 @@ class EthDbgShell(cmd.Cmd):
 
     def do_calldata(self, arg):
         if arg and not self.started:
-            self.calldata = arg
+            self.debug_target.calldata = arg
         else:
-            print(f'{self.calldata}')
+            print(f'{self.debug_target.calldata}')
 
     def do_weitoeth(self, arg):
         try:
@@ -455,23 +720,31 @@ class EthDbgShell(cmd.Cmd):
         except Exception:
             print(f'Invalid ETH amount')
 
-    def do_storageat(self, arg):
-        if arg:
-            if not self.started:
-                try:
-                    print(f'{self.w3.eth.get_storage_at(self.target, arg).hex()}')
-                except Exception as e:
-                    print("Something went wrong while fetching storage:")
-                    print(f' Error: {RED_COLOR}{e}{RESET_COLOR}')
-            else:
-                try:
-                    print(f'{"0x{:064x}".format(self.comp.state.get_storage(self.comp.msg.storage_address, int(arg,16)))}')
-                except Exception as e:
-                    print("Something went wrong while fetching storage:")
-                    print(f' Error: {RED_COLOR}{e}{RESET_COLOR}')
+    def do_storageat(self, arg1):
+        if not arg1:
+            print("Usage: storageat [<address>:]<slot>[:<count>]")
+            return
+
+        address = None
+        if ':' in arg1:
+            address, slot = arg1.split(':')
+            slot = int(slot, 0)
+            address = HexBytes(address).hex()
         else:
-            print("Usage: storageat <slot>")
-    
+            slot = int(arg1, 0)
+
+        address = self.comp.msg.storage_address if self.started else self.debug_target.target_address
+        try:
+            if self.started:
+                value_read = self.comp.state.get_storage(address, slot)
+            else:
+                value_read = self.w3.eth.get_storage_at(address, slot)
+        except Exception as e:
+            print("Something went wrong while fetching storage:")
+            print(f' Error: {RED_COLOR}{e}{RESET_COLOR}')
+
+        print(f' {CYAN_COLOR}[r]{RESET_COLOR} Slot: {slot} | Value: {hex(value_read)}')
+
     @only_when_started
     def do_sstores(self, arg):
         # Displat all the sstores issued during the tx
@@ -493,13 +766,6 @@ class EthDbgShell(cmd.Cmd):
         for b_idx, b in enumerate(self.breakpoints):
             print(f'Breakpoint {b_idx} | {b}')
 
-    '''
-    def do_break(self, arg):
-        if arg:
-            self.breakpoints.add(int(arg,16))
-            print(f'Breakpoint set at {arg}')
-    '''
-    
     def do_break(self, arg):
         # parse the arg
         break_args = arg.split(" ")
@@ -517,6 +783,7 @@ class EthDbgShell(cmd.Cmd):
             self.temp_break_finish = True
             self.finish_curr_stack_depth = len(self.callstack)
             self._resume()
+
 
     def do_ipython(self, arg):
         import IPython; IPython.embed()
@@ -561,31 +828,22 @@ class EthDbgShell(cmd.Cmd):
             if answer.lower() == 'y':
                 raise RestartDbgException()
             return
-        if self.target == "0x0":
+        if not self.debug_target.target_address:
             print("No target set. Use 'target' command to set it.")
             return
-        if self.calldata == '' and self.started == False:
+        if not self.debug_target.calldata and self.started == False:
             print("No calldata set. Proceeding with empty calldata.")
 
-        vm, header = get_evm(self.w3, self.block, self._myhook)
-        self.fork = vm.fork
+        vm, header = get_evm(self.w3, self.debug_target.block_number, self._myhook)
+        self.debug_target.set_default('fork', vm.fork)
 
-        txn = get_txn(self.ethdbg_conf['user.account']['pk'],
-                      get_chainid(self.chain),
-                      self.calldata,
-                      self.gas,
-                      self.gasPrice,
-                      self.w3.eth.get_transaction_count(self.ethdbg_conf['user.account']['address']),
-                      self.value,
-                      self.target)
-
+        txn = self.debug_target.get_transaction_dict()
         raw_txn = bytes(self.account.sign_transaction(txn).rawTransaction)
-
         txn = vm.get_transaction_builder().decode(raw_txn)
 
         self.started = True
 
-        origin_callframe = CallFrame(self.target, self.account.address, self.account.address, self.value, "-", "-")
+        origin_callframe = CallFrame(self.debug_target.target_address, self.account.address, self.account.address, self.debug_target.value, "-", "-")
         self.callstack.append(origin_callframe)
 
         receipt, comp = vm.apply_transaction(
@@ -784,10 +1042,12 @@ class EthDbgShell(cmd.Cmd):
         if arg != 'init':
             print(title)
 
+        assert not self.started, "Debugger already started."
+
         # print the chain context and the transaction context
-        print(f'Account: {YELLOW_COLOR}{self.account.address}{RESET_COLOR} | Target Contract: {YELLOW_COLOR}{self.target}{RESET_COLOR}')
-        print(f'Chain: {self.chain} | ChainRPC: {self.chainrpc} | Block Number: {self.block}')
-        print(f'Value: {self.value} | Gas: {self.gas}')
+        print(f'Account: {YELLOW_COLOR}{self.account.address}{RESET_COLOR} | Target Contract: {YELLOW_COLOR}{self.debug_target.target_address}{RESET_COLOR}')
+        print(f'Chain: {self.debug_target.chain} | Node: {self.w3.provider.endpoint_uri} | Block Number: {self.debug_target.block_number}')
+        print(f'Value: {self.debug_target.value} | Gas: {self.debug_target.gas}')
 
     def _display_context(self, cmdloop=True):
         metadata_view = self._get_metadata()
@@ -820,13 +1080,16 @@ class EthDbgShell(cmd.Cmd):
         with computation.code.seek(pc):
             opcode_bytes = computation.code.read(64) # max 32 byte immediate + 32 bytes should be enough, right???
 
-        assert self.fork is not None
-        insn: Instruction = disassemble_one(opcode_bytes, pc=pc, fork=self.fork)
-        assert insn is not None, "64 bytes was not enough to disassemble?? or this is somehow an invalid opcode??"
-        assert insn.mnemonic == opcode.mnemonic, "disassembled opcode does not match the opcode we're currently executing??"
-        hex_bytes = ' '.join(f'{b:02x}' for b in insn.bytes[:5])
-        if insn.size > 5: hex_bytes += ' ...'
-        _opcode_str = f'{insn.pc:#04x}  {hex_bytes:18} {str(insn):20}    // {insn.description}'
+        assert self.debug_target.fork is not None
+        if opcode_bytes:
+            insn: Instruction = disassemble_one(opcode_bytes, pc=pc, fork=self.debug_target.fork)
+            assert insn is not None, "64 bytes was not enough to disassemble?? or this is somehow an invalid opcode??"
+            assert insn.mnemonic == opcode.mnemonic, "disassembled opcode does not match the opcode we're currently executing??"
+            hex_bytes = ' '.join(f'{b:02x}' for b in insn.bytes[:5])
+            if insn.size > 5: hex_bytes += ' ...'
+            _opcode_str = f'{pc:#06x}  {hex_bytes:18} {str(insn):20}    // {insn.description}'
+        else:
+            _opcode_str = f'{pc:#06x}  {"":18} {opcode.mnemonic:15} [WARNING: no code]'
 
         if self.log_op:
             print(_opcode_str)
@@ -841,7 +1104,6 @@ class EthDbgShell(cmd.Cmd):
         if self.temp_break:
             self.temp_break = False
             self._display_context()
-            
         #elif opcode.mnemonic in self.mnemonic_bps:
         #    self._display_context()
         
@@ -850,7 +1112,6 @@ class EthDbgShell(cmd.Cmd):
             self.temp_break_finish = False
             self.finish_curr_stack_depth = None
             self._display_context()
-            
         elif opcode.mnemonic == "STOP":
             self._display_context()
 
@@ -859,7 +1120,7 @@ class EthDbgShell(cmd.Cmd):
 
             slot_id = computation._stack.values[-1]
             slot_id = HexBytes(slot_id[1]).hex()
-            
+
             slot_val = computation._stack.values[-2]
             slot_val = HexBytes(slot_val[1]).hex()
 
@@ -874,7 +1135,7 @@ class EthDbgShell(cmd.Cmd):
 
             slot_id = computation._stack.values[-1]
             slot_id = HexBytes(slot_id[1]).hex()
-            
+
             # CHECK THIS
             slot_val = computation.state.get_storage(computation.msg.storage_address, int(slot_id,16))
 
@@ -888,7 +1149,7 @@ class EthDbgShell(cmd.Cmd):
 
             if opcode.mnemonic == "CALL":
                 contract_target = computation._stack.values[-2]
-                contract_target = HexBytes(contract_target[1]).hex() 
+                contract_target = HexBytes(contract_target[1]).hex()
 
                 value_sent = int.from_bytes(HexBytes(computation._stack.values[-3][1]), byteorder='big')
 
@@ -899,13 +1160,13 @@ class EthDbgShell(cmd.Cmd):
                                         '0x' + computation.transaction_context.origin.hex(),
                                         value_sent,
                                         "CALL",
-                                        hex(computation.code.program_counter)
+                                        hex(pc)
                                         )
                 self.callstack.append(new_callframe)
-                
+
             elif opcode.mnemonic == "DELEGATECALL":
                 contract_target = computation._stack.values[-2]
-                contract_target = HexBytes(contract_target[1]).hex() 
+                contract_target = HexBytes(contract_target[1]).hex()
 
                 value_sent = int.from_bytes(HexBytes(computation._stack.values[-3][1]), byteorder='big')
 
@@ -916,13 +1177,13 @@ class EthDbgShell(cmd.Cmd):
                                         '0x' + computation.transaction_context.origin.hex(),
                                         value_sent,
                                         "DELEGATECALL",
-                                        hex(computation.code.program_counter)
+                                        hex(pc)
                                         )
                 self.callstack.append(new_callframe)
 
             elif opcode.mnemonic == "STATICCALL":
                 contract_target = computation._stack.values[-2]
-                contract_target = HexBytes(contract_target[1]).hex() 
+                contract_target = HexBytes(contract_target[1]).hex()
 
                 value_sent = int.from_bytes(HexBytes(computation._stack.values[-3][1]), byteorder='big')
 
@@ -933,7 +1194,7 @@ class EthDbgShell(cmd.Cmd):
                                         '0x' + computation.transaction_context.origin.hex(),
                                         value_sent,
                                         "STATICCALL",
-                                        hex(computation.code.program_counter)
+                                        hex(pc)
                                         )
                 self.callstack.append(new_callframe)
 
@@ -948,7 +1209,7 @@ class EthDbgShell(cmd.Cmd):
                     '0x' + computation.transaction_context.origin.hex(),
                     contract_value,
                     "CREATE",
-                    hex(computation.code.program_counter)
+                    hex(pc)
                 )
                 self.callstack.append(new_callframe)
 
@@ -963,7 +1224,7 @@ class EthDbgShell(cmd.Cmd):
                     error =  self.comp.error
                 except Exception:
                     pass
-                print(f'{YELLOW_COLOR}>>> Execution Reverted at 0x{computation.msg.code_address.hex()} | PC: {hex(computation.code.program_counter)} | Message: {error} <<<{RESET_COLOR}')
+                print(f'{YELLOW_COLOR}>>> Execution Reverted at 0x{computation.msg.code_address.hex()} | PC: {hex(pc)} | Message: {error} <<<{RESET_COLOR}')
                 self._display_context()
 
             self.callstack.pop()
@@ -988,54 +1249,26 @@ if __name__ == "__main__":
 
     # parse optional argument
     parser.add_argument("--txid", help="address of the smart contract we are debugging", default=None)
-    parser.add_argument("--chain", help="chain name", default="mainnet")
-    parser.add_argument("--chainrpc", help="url to connect to geth (infura or private)", default=DEFAULT_CHAINRPC)
-
+    parser.add_argument("--chain", help="chain name", default=None)
+    parser.add_argument("--node-url", help="url to connect to geth node (infura, alchemy, or private)", default=DEFAULT_NODE_URL)
     parser.add_argument("--target", help="address of the smart contract we are debugging", default=None)
-    parser.add_argument("--block", help="reference block", default=DEFAULT_BLOCK)
+    parser.add_argument("--block", help="reference block", default=None)
     parser.add_argument("--calldata", help="calldata to use for the transaction", default=None)
-
-
-    # Declare an argument that is going to have multiple values
     args = parser.parse_args()
 
     ethdbg_conf = get_config()
+    w3 = get_w3_provider(args.node_url)
 
-    w3 = get_w3_provider(args.chainrpc)
-
-    if args.block == "last":
-        block_ref = w3.eth.block_number
-    else:
-        block_ref = int(args.block)
-
-    target = args.target
-    chain = args.chain
-    chainrpc = args.chainrpc
-    calldata = args.calldata
-
-    # We use txid if we want to replay a transaction with out account.
-    # WARNING: the result MAY differ since you are using a different 'from'
     if args.txid:
-        if args.target or args.calldata:
-            print("You can't specify a txid and a target/calldata/block")
-            sys.exit(1)
-        else:
-            tx_data = w3.eth.get_transaction(args.txid)
-            target = tx_data.get('to', None)
-            calldata = tx_data['input'][2:]
-            block_ref = tx_data['blockNumber']
-            chain_id = tx_data.get('chainId', hex(w3.eth.chain_id))
+        # replay transaction mode
+        debug_target = TransactionDebugTarget(w3)
+        debug_target.replay_transaction(args.txid, chain=args.chain, to=args.target, block_number=args.block, calldata=args.calldata)
+    else:
+        # interactive mode
+        debug_target = TransactionDebugTarget(w3)
+        debug_target.new_transaction(to=args.target, calldata=args.calldata, chain=args.chain, block_number=args.block)
 
-            if args.chain is not None:
-                if chain_id != get_chainid(chain):
-                    print("The provided chainid is different from the chainid of the transaction you are trying to debug")
-                    sys.exit(1)
-                else:
-                    chain = get_chain_name(chain_id)
-            else:
-                chain = get_chain_name(w3.eth.chain_id)
-
-    ethdbgshell = EthDbgShell(ethdbg_conf, w3, chain, chainrpc, block_ref, target, calldata)
+    ethdbgshell = EthDbgShell(ethdbg_conf, w3, debug_target=debug_target)
     ethdbgshell.print_license()
 
     while True:
@@ -1045,4 +1278,4 @@ if __name__ == "__main__":
             print("Program terminated.")
             continue
         except RestartDbgException:
-            ethdbgshell = EthDbgShell(ethdbg_conf, w3, chain, chainrpc, block_ref, target, calldata)
+            ethdbgshell = EthDbgShell(ethdbg_conf, w3, debug_target=debug_target)

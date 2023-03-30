@@ -315,6 +315,7 @@ class ParisVM(eth.vm.forks.arrow_glacier.ArrowGlacierVM):
 # ===========
 
 def to_snake_case(s: str) -> str:
+    s = s.replace('-', '_')
     return ''.join(['_' + c.lower() if c.isupper() else c for c in s]).lstrip('_')
 
 def build_block_header(w3: web3.Web3, block_number: int) -> BlockHeader:
@@ -330,7 +331,7 @@ def build_block_header(w3: web3.Web3, block_number: int) -> BlockHeader:
 
         if w3.eth.chain_id == 11155111:
             block = w3.eth.get_block(block_number)
-            BlockHeader = eth.vm.forks.london.blocks.LondonBlockHeader
+            BlockHeader = eth.vm.forks.paris.blocks.ParisBlockHeader
 
             block_kwargs = {}
             for key, value in block.items():
@@ -387,7 +388,7 @@ def get_vm_for_block(chain_id, block_number: int, hook: OpcodeHook = None) -> ty
         most code copy+pasted from pyevm
         """
         called_set_balance = False
-                
+
         def get_code(self, address: Address) -> bytes:
             validate_canonical_address(address, title="Storage Address")
 
