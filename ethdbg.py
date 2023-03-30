@@ -628,7 +628,7 @@ class EthDbgShell(cmd.Cmd):
         # print the chain context and the transaction context
         print(f'Account: {YELLOW_COLOR}{self.account.address}{RESET_COLOR} | Target Contract: {YELLOW_COLOR}{self.target}{RESET_COLOR}')
         print(f'Chain: {self.chain} | ChainRPC: {self.chainrpc} | Block Number: {self.block}')
-        print(f'Value: {self.value} | Gas: {self.gas} | maxPriorityFeePerGas: {self.maxPriorityFeePerGas} | maxFeePerGas: {self.maxFeePerGas}')
+        print(f'Value: {self.value} | Gas: {self.gas}')
 
     def _display_context(self, cmdloop=True):
         metadata_view = self._get_metadata()
@@ -814,7 +814,7 @@ if __name__ == "__main__":
             tx_data = w3.eth.get_transaction(args.txid)
             target = tx_data.get('to', None)
             calldata = tx_data['input'][2:]
-            block = tx_data['blockNumber']
+            block_ref = tx_data['blockNumber']
             chain_id = tx_data.get('chainId', hex(w3.eth.chain_id))
 
             if args.chain is not None:
