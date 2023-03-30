@@ -5,6 +5,7 @@ import web3
 import argparse
 import configparser
 import os
+import re
 import sys
 import sha3
 from pyevmasm_fixed import disassemble, disassemble_all, disassemble_hex, disassemble_one, Instruction
@@ -108,6 +109,151 @@ class CallFrame():
         self.calltype = calltype
         self.callsite = callsite
 
+ALLOWED_COND_BPS = ['addr', 'saddr', 'op', 'pc']
+BPS_RE_PATTERN = r"(.*)(==|=|!=|>|<|<=|>=)(.*)"
+ETH_ADDRESS = r'^(0x)?[0-9a-fA-F]{40}$'
+
+class Breakpoint():
+    def __init__(self, break_args):
+        
+        # Processing of the breakpoint conditions
+        self.conditions = list()
+        
+        self.pc = None
+        self.op = None
+        self.simple_bp = False
+        
+        # Is this a simple breakpoint?
+        # This is the case if len(break_args) == 1 and none of the ALLOWED_COND_BPS is in break_args[0]
+        if len(break_args) == 1 and not any(cond_keyword in break_args[0] for cond_keyword in ALLOWED_COND_BPS):
+            self.simple_bp = True
+            # Is it a valid opcode
+            if break_args[0].upper() in ALL_EVM_OPCODES:
+                self.op = break_args[0].upper()
+            else:
+                # Is it a valid pc?
+                try:
+                    self.pc = int(break_args[0],16)
+                except Exception:
+                    raise InvalidBreakpointException()
+        else:
+            for break_arg in break_args:
+                matches = re.findall(BPS_RE_PATTERN, break_arg)[0]
+                if len(matches) != 3:
+                    print(f"Invalid breakpoint condition {break_arg}. Skipping.")
+                    continue
+                else:
+                    what  = matches[0]
+                    when  = matches[1]
+                    value = matches[2]
+                    # Validation of the breakpoints parameters here
+                    if self._validate_bp(what, when, value):
+                        self.conditions.append((what, when, value))
+                    else:
+                        raise InvalidBreakpointException()
+    
+    def __str__(self):
+        _bp_str = ''
+        
+        if self.simple_bp:
+            _bp_str += "Simple Breakpoint at "
+            if self.op:
+                _bp_str += f'{self.op}'
+            elif self.pc:
+                _bp_str += f'{hex(self.pc)}'
+        else:
+            _bp_str += "Conditional Breakpoint if "
+            for condition in self.conditions:
+                what = condition[0]
+                when  = condition[1]
+                value = condition[2]
+                _bp_str += f'{what} {when} {value} '
+        
+        return _bp_str
+                    
+    def _validate_bp(self,what, when, value):
+        if what not in ALLOWED_COND_BPS:
+            return False
+
+        # Now we want to check the type of the value given a 'what'
+        if what == 'pc':
+            try:
+                int(value,16)
+            except Exception:
+                return False
+            return True
+        elif what == 'op':
+            if value.upper() in ALL_EVM_OPCODES:
+                return True
+            else:
+                return False
+        elif what == 'addr' or what == 'saddr':
+            if re.match(ETH_ADDRESS, value):
+                return True
+            else:
+                return False
+        elif 'storage' in what:
+            storage_index = what.split('[')[1].split(']')[0]
+            try:
+                # Storage index must be a hex number
+                int(storage_index,16)
+            except Exception:
+                return False
+        else:
+            return False    
+                   
+    def eval_bp(self, comp, opcode):
+                
+        if self.simple_bp:
+            if self.op:
+                return opcode.mnemonic == self.op
+            elif self.pc:
+                return self.pc == comp.code.program_counter
+            else:
+                return False
+        else:
+            for condition in self.conditions:
+                what = condition[0]
+                when  = condition[1]
+                value = condition[2]
+                
+                if when == '=':
+                    when = '==' # because I'm a nice guy           
+                
+                if what == 'pc':
+                    pc_val = int(value,16)
+
+                    expr = f'{pc_val} {when} {comp.code.program_counter}'
+                    if not eval(expr):
+                        return False
+                    
+                elif what == 'op':
+                    value = value.upper()
+                    expr = f'"{value}" {when} "{opcode.mnemonic}"'
+                    if not eval(expr):
+                        return False
+                
+                elif what == 'addr':
+                    # Warning: this is not checksummed
+                    curr_code_addr = '0x' + comp.msg.code_address.hex()
+                    value = value.lower()
+                    expr = f'{value} {when} {curr_code_addr}'
+                    if not eval(expr):
+                        return False
+                    
+                elif what == 'saddr':
+                    # Warning: this is not checksummed
+                    curr_storage_addr = '0x' + comp.msg.storage_address.hex()
+                    value = value.lower()
+                    expr = f'{value} {when} {curr_storage_addr}'
+                    if not eval(expr):
+                        return False
+                else:
+                    return False
+            
+            # It's a hit of a conditional bp! 
+            return True
+                
 class EthDbgShell(cmd.Cmd):
 
     intro = '\nType help or ? to list commands.\n'
@@ -156,9 +302,8 @@ class EthDbgShell(cmd.Cmd):
         #  Whether the debugger is running or not
         self.started = False
         #  Breakpoints PCs
-        self.breakpoints = set()
-        self.mnemonic_bps = set()
-
+        self.breakpoints = list()
+        
         # Used for finish command
         self.temp_break_finish = False
         self.finish_curr_stack_depth = None
@@ -346,33 +491,32 @@ class EthDbgShell(cmd.Cmd):
     def do_breaks(self,arg):
         # Print all the breaks
         for b_idx, b in enumerate(self.breakpoints):
-            print(f'Breakpoint {b_idx} at {hex(b)}')
+            print(f'Breakpoint {b_idx} | {b}')
 
+    '''
     def do_break(self, arg):
         if arg:
             self.breakpoints.add(int(arg,16))
             print(f'Breakpoint set at {arg}')
+    '''
     
+    def do_break(self, arg):
+        # parse the arg
+        break_args = arg.split(" ")
+        try:
+            bp = Breakpoint(break_args)
+            self.breakpoints.append(bp)
+        except InvalidBreakpointException as e:
+            print("Invalid breakpoint")
+    
+    do_b = do_break
+
     @only_when_started
     def do_finish(self, arg):
         if len(self.callstack) > 1:
             self.temp_break_finish = True
             self.finish_curr_stack_depth = len(self.callstack)
             self._resume()
-
-    do_b = do_break
-
-    def do_mbreak(self, arg):
-        # TODO mbreak 0x2ab7c0ab9ab47fcf370d13058bfee28f2ec0940c:pc
-        if arg:
-            self.mnemonic_bps.add(arg.upper())
-            print(f'Mnemonic breakpoint set at {arg}')
-    do_mb = do_mbreak
-
-    def do_mbreaks(self, arg):
-        # Print all the mbreaks
-        for b_idx, b in enumerate(self.mnemonic_bps):
-            print(f'Mnemonic breakpoint {b_idx} at {b}')
 
     def do_ipython(self, arg):
         import IPython; IPython.embed()
@@ -405,16 +549,11 @@ class EthDbgShell(cmd.Cmd):
             else:
                 # Check if arg is a hex number
                 try:
-                    int(arg,16)
-                    self.breakpoints.remove(int(arg,16))
+                    arg = int(arg,16)
+                    del self.breakpoints[arg]
                     print(f'Breakpoint cleared at {arg}')
                 except Exception:
-                    # if it's not a number, it must be a mnemonic breakpoint
-                    try:
-                        self.mnemonic_bps.remove(arg.upper())
-                        print(f'Breakpoint cleared at {arg}')
-                    except Exception:
-                        print(f'Invalid mnemonic breakpoint {arg}')
+                    print("Invalid breakpoint")
 
     def do_run(self, arg):
         if self.started:
@@ -695,16 +834,23 @@ class EthDbgShell(cmd.Cmd):
         self.history.append(_opcode_str)
 
         # BREAKPOINT MANAGEMENT
-        if computation.code.program_counter in self.breakpoints or self.temp_break:
+        for sbp in self.breakpoints:
+            if sbp.eval_bp(self.comp, opcode):
+                self._display_context()
+        
+        if self.temp_break:
             self.temp_break = False
             self._display_context()
-        elif opcode.mnemonic in self.mnemonic_bps:
-            self._display_context()
-        elif self.temp_break_finish and len(self.callstack) < self.finish_curr_stack_depth:
+            
+        #elif opcode.mnemonic in self.mnemonic_bps:
+        #    self._display_context()
+        
+        if self.temp_break_finish and len(self.callstack) < self.finish_curr_stack_depth:
             # Reset finish break condition
             self.temp_break_finish = False
             self.finish_curr_stack_depth = None
             self._display_context()
+            
         elif opcode.mnemonic == "STOP":
             self._display_context()
 
