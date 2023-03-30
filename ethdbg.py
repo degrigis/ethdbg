@@ -418,6 +418,9 @@ class EthDbgShell(cmd.Cmd):
 
     def do_run(self, arg):
         if self.started:
+            answer = input("Debugger already started. Do you want to restart the debugger? [y/N] ")
+            if answer.lower() == 'y':
+                raise RestartDbgException()
             return
         if self.target == "0x0":
             print("No target set. Use 'target' command to set it.")
