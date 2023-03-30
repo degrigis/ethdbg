@@ -36,3 +36,19 @@ def get_terminal_size():
             return tty_rows, tty_columns
         except OSError:
             return 600, 100
+
+def get_chainid(chain_name):
+    if chain_name == "mainnet":
+        return 1
+    elif chain_name == "sepolia":
+        return 11155111
+    else:
+        raise Exception(f"Unknown chain name {chain_name}")
+
+def get_chain_name(id):
+    if id == 1:
+        return "mainnet"
+    elif id == 11155111:
+        return "sepolia"
+    else:
+        raise Exception("Unknown chain id")
