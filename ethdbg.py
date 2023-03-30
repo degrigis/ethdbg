@@ -729,6 +729,41 @@ class EthDbgShell(cmd.Cmd):
                                         hex(computation.code.program_counter)
                                         )
                 self.callstack.append(new_callframe)
+                
+            elif opcode.mnemonic == "DELEGATECALL":
+                contract_target = computation._stack.values[-2]
+                contract_target = HexBytes(contract_target[1]).hex() 
+
+                value_sent = int.from_bytes(HexBytes(computation._stack.values[-3][1]), byteorder='big')
+
+                # We gotta parse the callstack according to the *CALL opcode
+                new_callframe = CallFrame(
+                                        contract_target,
+                                        '0x' + computation.transaction_context.origin.hex(),
+                                        '0x' + computation.transaction_context.origin.hex(),
+                                        value_sent,
+                                        "DELEGATECALL",
+                                        hex(computation.code.program_counter)
+                                        )
+                self.callstack.append(new_callframe)
+
+            elif opcode.mnemonic == "STATICCALL":
+                contract_target = computation._stack.values[-2]
+                contract_target = HexBytes(contract_target[1]).hex() 
+
+                value_sent = int.from_bytes(HexBytes(computation._stack.values[-3][1]), byteorder='big')
+
+                # We gotta parse the callstack according to the *CALL opcode
+                new_callframe = CallFrame(
+                                        contract_target,
+                                        '0x' + computation.msg.code_address.hex(),
+                                        '0x' + computation.transaction_context.origin.hex(),
+                                        value_sent,
+                                        "STATICCALL",
+                                        hex(computation.code.program_counter)
+                                        )
+                self.callstack.append(new_callframe)
+
 
             elif opcode.mnemonic == "CREATE":
                 contract_value = HexBytes(computation._stack.values[-1][1]).hex()
