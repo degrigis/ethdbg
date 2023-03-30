@@ -159,6 +159,10 @@ class EthDbgShell(cmd.Cmd):
         self.breakpoints = set()
         self.mnemonic_bps = set()
 
+        # Used for finish command
+        self.temp_break_finish = False
+        self.finish_curr_stack_depth = None
+
         #  History of executed opcodes
         self.history = list()
         #  The computation object of py-evm
@@ -234,6 +238,9 @@ class EthDbgShell(cmd.Cmd):
 
     def do_start(self, arg):
         if self.started:
+            answer = input("Debugger already started. Do you want to restart the debugger? [y/N] ")
+            if answer.lower() == 'y':
+                raise RestartDbgException()
             return
         if self.target == "0x0":
             print("No target set. Use 'target' command to set it.")
@@ -284,18 +291,6 @@ class EthDbgShell(cmd.Cmd):
             print(storage_view)
         else:
             quick_view = self._get_quick_view(arg)
-
-    def do_maxPriorityFeePerGas(self, arg):
-        if arg and not self.started:
-            self.maxPriorityFeePerGas = int(arg,10)
-        else:
-            print(f'{self.maxPriorityFeePerGas} wei')
-
-    def do_maxFeePerGas(self, arg):
-        if arg and not self.started:
-            self.maxFeePerGas = int(arg,10)
-        else:
-            print(f'{self.maxFeePerGas} wei')
 
     def do_calldata(self, arg):
         if arg and not self.started:
@@ -357,6 +352,13 @@ class EthDbgShell(cmd.Cmd):
         if arg:
             self.breakpoints.add(int(arg,16))
             print(f'Breakpoint set at {arg}')
+    
+    @only_when_started
+    def do_finish(self, arg):
+        if len(self.callstack) > 1:
+            self.temp_break_finish = True
+            self.finish_curr_stack_depth = len(self.callstack)
+            self._resume()
 
     do_b = do_break
 
@@ -396,8 +398,23 @@ class EthDbgShell(cmd.Cmd):
 
     def do_clear(self, arg):
         if arg:
-            self.breakpoints.remove(int(arg,16))
-            print(f'Breakpoint cleared at {arg}')
+            if arg == "all":
+                self.breakpoints = set()
+                self.mnemonic_bps = set()
+                print("All breakpoints cleared")
+            else:
+                # Check if arg is a hex number
+                try:
+                    int(arg,16)
+                    self.breakpoints.remove(int(arg,16))
+                    print(f'Breakpoint cleared at {arg}')
+                except Exception:
+                    # if it's not a number, it must be a mnemonic breakpoint
+                    try:
+                        self.mnemonic_bps.remove(arg.upper())
+                        print(f'Breakpoint cleared at {arg}')
+                    except Exception:
+                        print(f'Invalid mnemonic breakpoint {arg}')
 
     def do_run(self, arg):
         if self.started:
@@ -647,6 +664,8 @@ class EthDbgShell(cmd.Cmd):
                 self.cmdloop(intro='')
             except ExitCmdException:
                 pass
+            except RestartDbgException:
+                raise RestartDbgException()
 
     def _myhook(self, opcode: Opcode, computation: ComputationAPI):
         # Store a reference to the computation to make it
@@ -677,6 +696,11 @@ class EthDbgShell(cmd.Cmd):
             self.temp_break = False
             self._display_context()
         elif opcode.mnemonic in self.mnemonic_bps:
+            self._display_context()
+        elif self.temp_break_finish and len(self.callstack) < self.finish_curr_stack_depth:
+            # Reset finish break condition
+            self.temp_break_finish = False
+            self.finish_curr_stack_depth = None
             self._display_context()
         elif opcode.mnemonic == "STOP":
             self._display_context()
@@ -739,7 +763,7 @@ class EthDbgShell(cmd.Cmd):
                 # We gotta parse the callstack according to the *CALL opcode
                 new_callframe = CallFrame(
                                         contract_target,
-                                        '0x' + computation.transaction_context.origin.hex(),
+                                        self.callstack[-1].msg_sender,
                                         '0x' + computation.transaction_context.origin.hex(),
                                         value_sent,
                                         "DELEGATECALL",
@@ -792,6 +816,7 @@ class EthDbgShell(cmd.Cmd):
                     pass
                 print(f'{YELLOW_COLOR}>>> Execution Reverted at 0x{computation.msg.code_address.hex()} | PC: {hex(computation.code.program_counter)} | Message: {error} <<<{RESET_COLOR}')
                 self._display_context()
+
             self.callstack.pop()
 
         # Execute the opcode!
@@ -870,3 +895,5 @@ if __name__ == "__main__":
         except ExitCmdException:
             print("Program terminated.")
             continue
+        except RestartDbgException:
+            ethdbgshell = EthDbgShell(ethdbg_conf, w3, chain, chainrpc, block_ref, target, calldata)
