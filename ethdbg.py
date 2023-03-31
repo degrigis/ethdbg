@@ -41,8 +41,8 @@ def get_w3_provider(web3_host):
     return w3
 
 
-def get_evm(w3, block_number, myhook):
-    VMClass = get_vm_for_block(w3.eth.chain_id, block_number, myhook)
+def get_evm(w3, block_number, myhook, impersonate=None):
+    VMClass = get_vm_for_block(w3.eth.chain_id, block_number, myhook, impersonate)
 
     db = MyChainDB(AtomicDB(StubMemoryDB(w3)))
 
@@ -55,6 +55,7 @@ def get_evm(w3, block_number, myhook):
 
     old_block = w3.eth.get_block(block_number-1)
     state_root = bytes(old_block['stateRoot'])
+    
     header = vm.get_header()
     header = header.copy(gas_used = 0, state_root=state_root)
     execution_context = vm.create_execution_context(
@@ -106,6 +107,7 @@ class EthDbgShell(cmd.Cmd):
             to='0x0',
             origin=self.account.address,
             sender=self.account.address,
+            nonce=self.w3.eth.get_transaction_count(self.account.address),
         )
 
         # The *CALL trace between contracts
@@ -215,15 +217,18 @@ class EthDbgShell(cmd.Cmd):
         if not self.debug_target.calldata and self.started == False:
             print("No calldata set. Proceeding with empty calldata.")
 
-        vm, header = get_evm(self.w3, self.debug_target.block_number, self._myhook)
-
+        if self.debug_target.debug_type == "replay":
+            vm, header = get_evm(self.w3, self.debug_target.block_number, self._myhook, impersonate=self.debug_target.source_address)
+        else:
+            vm, header = get_evm(self.w3, self.debug_target.block_number, self._myhook)
+            
         assert self.debug_target.fork is None or self.debug_target.fork == vm.fork
         self.debug_target.set_default('fork', vm.fork)
 
         txn = self.debug_target.get_transaction_dict()
         raw_txn = bytes(self.account.sign_transaction(txn).rawTransaction)
         txn = vm.get_transaction_builder().decode(raw_txn)
-
+        
         self.started = True
 
         origin_callframe = CallFrame(
@@ -236,7 +241,7 @@ class EthDbgShell(cmd.Cmd):
         self.callstack.append(origin_callframe)
 
         self.temp_break = True
-
+        
         receipt, comp = vm.apply_transaction(
             header=header,
             transaction=txn,

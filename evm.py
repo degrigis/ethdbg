@@ -19,7 +19,7 @@ from eth_typing import Address, Hash32
 from eth.vm.state import BaseState
 from eth.vm.opcode import Opcode
 from eth.vm.opcode_values import DIFFICULTY
-from eth.abc import AccountDatabaseAPI, BlockHeaderAPI, DatabaseAPI, ComputationAPI, ChainContextAPI, ExecutionContextAPI, AtomicDatabaseAPI, StateAPI, OpcodeAPI, SignedTransactionAPI
+from eth.abc import AccountDatabaseAPI, BlockHeaderAPI, DatabaseAPI, ComputationAPI, ChainContextAPI, ExecutionContextAPI, TransactionContextAPI, AtomicDatabaseAPI, StateAPI, OpcodeAPI, SignedTransactionAPI
 from eth.rlp.headers import BlockHeader
 from eth.rlp.transactions import SignedTransactionMethods
 from eth.constants import EMPTY_SHA3
@@ -348,7 +348,7 @@ def build_block_header(w3: web3.Web3, block_number: int) -> BlockHeader:
             raise
 
 
-def get_vm_for_block(chain_id, block_number: int, hook: OpcodeHook = None) -> typing.Type[VM]:
+def get_vm_for_block(chain_id, block_number: int, hook: OpcodeHook = None, impersonate: str = None) -> typing.Type[VM]:
     """
     Construct the approprate VM for the given block number, and optionally insert the given hook
     to run after each instruction.
@@ -380,6 +380,7 @@ def get_vm_for_block(chain_id, block_number: int, hook: OpcodeHook = None) -> ty
 
     TargetStateClass = TargetVM.get_state_class()
     TargetAccountDBClass = TargetStateClass.get_account_db_class()
+    TargetTransactionClass = TargetStateClass.get_transaction_context_class()
 
     class MyAccountDb(TargetAccountDBClass):
         """
@@ -424,9 +425,20 @@ def get_vm_for_block(chain_id, block_number: int, hook: OpcodeHook = None) -> ty
             self.called_set_balance = True
             return super().set_balance(address, balance)
 
-    class MyStateClass(TargetStateClass):
-        """only used to pass account db stub"""
-        account_db_class: typing.Type[AccountDatabaseAPI] = MyAccountDb
+    if impersonate:
+        class MyBaseTransactionClass(TargetTransactionClass):
+            def get_sender(self):
+                print(f"impersonating {impersonate}")
+                return bytes.fromhex(impersonate[2:]).hex()
+                
+        class MyStateClass(TargetStateClass):
+            """only used to pass account db stub"""
+            account_db_class: typing.Type[AccountDatabaseAPI] = MyAccountDb
+            transaction_context_class: typing.Type[TransactionContextAPI] = MyBaseTransactionClass
+    else:
+        class MyStateClass(TargetStateClass):
+            """only used to pass account db stub"""
+            account_db_class: typing.Type[AccountDatabaseAPI] = MyAccountDb
 
     class MyVM(TargetVM):
         """only used to pass account db stub (via MyStateClass)"""
