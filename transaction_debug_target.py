@@ -239,7 +239,7 @@ class TransactionDebugTarget:
 
         # TODO pull default account and private key from ethpwn
         self.target_address = kwargs.pop('to', None) or tx_data.get('to', None)
-        self.source_address = kwargs.pop('from', None) or tx_data.get('from', None)
+        self.source_address = kwargs.pop('sender', None) or tx_data.get('from', None)
         self.calldata = kwargs.pop('calldata', None) or kwargs.pop('input', None) or tx_data.get('input', None)
 
         for k, v in tx_data.items():
@@ -263,7 +263,7 @@ class TransactionDebugTarget:
         self.calldata = calldata
 
         # TODO pull default account and private key from ethpwn
-        self.source_address = kwargs.pop('from', None)
+        self.source_address = kwargs.pop('sender', None)
         self.block_number = kwargs.pop('block_number', self.w3.eth.block_number)
         self.chain = kwargs.pop('chain', hex(self.w3.eth.chain_id))
         self.fork = kwargs.pop('fork', self.w3.eth.fork)

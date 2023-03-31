@@ -100,7 +100,7 @@ class EthDbgShell(cmd.Cmd):
 
         # EVM stuff
         self.w3 = w3
-
+        
         self.debug_target: TransactionDebugTarget = debug_target
         self.debug_target.set_defaults(
             gas=6_000_000, # silly default value
@@ -108,9 +108,9 @@ class EthDbgShell(cmd.Cmd):
             value=0,
             calldata='',
             to='0x0',
-            origin=self.account.address,
-            sender=self.account.address,
-            nonce=self.w3.eth.get_transaction_count(self.account.address),
+            origin=self.debug_target.source_address,
+            sender=self.debug_target.source_address,
+            nonce=self.w3.eth.get_transaction_count(self.debug_target.source_address),  
         )
 
         # The *CALL trace between contracts
@@ -174,7 +174,10 @@ class EthDbgShell(cmd.Cmd):
         print(f'{self.debug_target.block_number}')
 
     def do_account(self, arg):
-        print(f'{self.account.address}')
+        if self.debug_target.debug_type == "replay":
+            print(f'{self.debug_target.source_address} (impersonating)')
+        else:
+            print(f'{self.debug_target.source_address}')
 
     def do_target(self, arg):
         # Check if there is an argument
@@ -240,8 +243,8 @@ class EthDbgShell(cmd.Cmd):
 
         origin_callframe = CallFrame(
             self.debug_target.target_address,
-            self.account.address,
-            self.account.address,
+            self.debug_target.source_address,
+            self.debug_target.source_address,
             self.debug_target.value,
             "-",
             "-")
@@ -409,7 +412,7 @@ class EthDbgShell(cmd.Cmd):
 
         self.started = True
 
-        origin_callframe = CallFrame(self.debug_target.target_address, self.account.address, self.account.address, self.debug_target.value, "-", "-")
+        origin_callframe = CallFrame(self.debug_target.target_address, self.debug_target.source_address, self.debug_target.source_address, self.debug_target.value, "-", "-")
         self.callstack.append(origin_callframe)
 
         receipt, comp = vm.apply_transaction(
@@ -611,7 +614,7 @@ class EthDbgShell(cmd.Cmd):
         assert not self.started, "Debugger already started."
 
         # print the chain context and the transaction context
-        print(f'Account: {YELLOW_COLOR}{self.account.address}{RESET_COLOR} | Target Contract: {YELLOW_COLOR}{self.debug_target.target_address}{RESET_COLOR}')
+        print(f'Account: {YELLOW_COLOR}{self.debug_target.source_address}{RESET_COLOR} | Target Contract: {YELLOW_COLOR}{self.debug_target.target_address}{RESET_COLOR}')
         print(f'Chain: {self.debug_target.chain} | Node: {self.w3.provider.endpoint_uri} | Block Number: {self.debug_target.block_number}')
         print(f'Value: {self.debug_target.value} | Gas: {self.debug_target.gas}')
 
@@ -662,16 +665,14 @@ class EthDbgShell(cmd.Cmd):
 
         self.history.append(_opcode_str)
 
-        # BREAKPOINT MANAGEMENT
-        for sbp in self.breakpoints:
-            if sbp.eval_bp(self.comp, pc, opcode):
-                self._display_context()
-
         if self.temp_break:
             self.temp_break = False
             self._display_context()
-        #elif opcode.mnemonic in self.mnemonic_bps:
-        #    self._display_context()
+        else:
+            # BREAKPOINT MANAGEMENT
+            for sbp in self.breakpoints:
+                if sbp.eval_bp(self.comp, pc, opcode):
+                    self._display_context()
 
         if self.temp_break_finish and len(self.callstack) < self.finish_curr_stack_depth:
             # Reset finish break condition
@@ -815,6 +816,7 @@ if __name__ == "__main__":
 
     # parse optional argument
     parser.add_argument("--txid", help="address of the smart contract we are debugging", default=None)
+    parser.add_argument("--sender", help="address of the sender", default=None)
     parser.add_argument("--chain", help="chain name", default=None)
     parser.add_argument("--node-url", help="url to connect to geth node (infura, alchemy, or private)", default=DEFAULT_NODE_URL)
     parser.add_argument("--target", help="address of the smart contract we are debugging", default=None)
@@ -828,11 +830,11 @@ if __name__ == "__main__":
     if args.txid:
         # replay transaction mode
         debug_target = TransactionDebugTarget(w3)
-        debug_target.replay_transaction(args.txid, chain=args.chain, to=args.target, block_number=args.block, calldata=args.calldata)
+        debug_target.replay_transaction(args.txid, chain=args.chain, sender=args.sender, to=args.target, block_number=args.block, calldata=args.calldata)
     else:
         # interactive mode
         debug_target = TransactionDebugTarget(w3)
-        debug_target.new_transaction(to=args.target, calldata=args.calldata, chain=args.chain, block_number=args.block)
+        debug_target.new_transaction(to=args.target, sender=args.sender, calldata=args.calldata, chain=args.chain, block_number=args.block)
 
     ethdbgshell = EthDbgShell(ethdbg_conf, w3, debug_target=debug_target)
     ethdbgshell.print_license()
