@@ -11,7 +11,7 @@ import os
 import re
 import sys
 import sha3
-from breakpoint import Breakpoint
+from breakpoint import Breakpoint, ETH_ADDRESS
 from pyevmasm_fixed import disassemble, disassemble_all, disassemble_hex, disassemble_one, Instruction
 
 from evm import *
@@ -827,6 +827,12 @@ if __name__ == "__main__":
 
     ethdbg_conf = get_config()
     w3 = get_w3_provider(args.node_url)
+
+    if args.sender != 0:
+        # Validate ETH address using regexp
+        if not re.match(ETH_ADDRESS, args.sender):
+            print(f"{RED_COLOR}Invalid ETH address provided as sender: {args.sender}{RESET_COLOR}")
+            sys.exit()
 
     if args.txid:
         # replay transaction mode
