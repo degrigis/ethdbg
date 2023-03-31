@@ -29,6 +29,8 @@ class TransactionDebugTarget:
         self._max_fee_per_gas = None
         self._max_priority_fee_per_gas = None
         self._nonce = None
+        
+        self.debug_type = None
 
     def set_default(self, key, value):
         self._defaults[key] = value
@@ -252,6 +254,8 @@ class TransactionDebugTarget:
             if v is not None:
                 setattr(self, k, v)
 
+        self.debug_type = "replay"
+        
         return self
 
     def new_transaction(self, to, calldata, **kwargs):
@@ -271,7 +275,7 @@ class TransactionDebugTarget:
                 setattr(self, k, v)
             except AttributeError:
                 pass
-
+        self.debug_type = "new"
         return self
 
 

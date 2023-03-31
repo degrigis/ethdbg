@@ -6,6 +6,7 @@ from hexbytes import HexBytes
 import web3
 import argparse
 import configparser
+import functools
 import os
 import re
 import sys
@@ -41,8 +42,8 @@ def get_w3_provider(web3_host):
     return w3
 
 
-def get_evm(w3, block_number, myhook, impersonate=None):
-    VMClass = get_vm_for_block(w3.eth.chain_id, block_number, myhook, impersonate)
+def get_evm(w3, block_number, myhook):
+    VMClass = get_vm_for_block(w3.eth.chain_id, block_number, myhook)
 
     db = MyChainDB(AtomicDB(StubMemoryDB(w3)))
 
@@ -80,6 +81,8 @@ class CallFrame():
         self.value = value
         self.calltype = calltype
         self.callsite = callsite
+        
+ORIGINAL_extract_transaction_sender = eth._utils.transactions.extract_transaction_sender
 
 class EthDbgShell(cmd.Cmd):
 
@@ -218,15 +221,19 @@ class EthDbgShell(cmd.Cmd):
             print("No calldata set. Proceeding with empty calldata.")
 
         if self.debug_target.debug_type == "replay":
-            vm, header = get_evm(self.w3, self.debug_target.block_number, self._myhook, impersonate=self.debug_target.source_address)
+            def extract_transaction_sender(source_address, transaction: SignedTransactionAPI) -> Address:
+                return bytes(HexBytes(source_address))
+            eth.vm.forks.frontier.transactions.extract_transaction_sender = functools.partial(extract_transaction_sender, self.debug_target.source_address)
         else:
-            vm, header = get_evm(self.w3, self.debug_target.block_number, self._myhook)
+            eth._utils.transactions.extract_transaction_sender = ORIGINAL_extract_transaction_sender
+        vm, header = get_evm(self.w3, self.debug_target.block_number, self._myhook)
             
         assert self.debug_target.fork is None or self.debug_target.fork == vm.fork
         self.debug_target.set_default('fork', vm.fork)
 
         txn = self.debug_target.get_transaction_dict()
         raw_txn = bytes(self.account.sign_transaction(txn).rawTransaction)
+        
         txn = vm.get_transaction_builder().decode(raw_txn)
         
         self.started = True
