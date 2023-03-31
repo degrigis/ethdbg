@@ -209,6 +209,8 @@ class EthDbgShell(cmd.Cmd):
             print(f'Could not retrieve function signature :(')
             print(f'{RED_COLOR}{e}{RESET_COLOR}')
 
+    do_guess = do_guessfuncid
+    
     def do_funcid(self, arg):
         arg = arg.encode('utf-8')
         k = sha3.keccak_256()
@@ -627,6 +629,65 @@ class EthDbgShell(cmd.Cmd):
                 _stack[3] += f'{ORANGE_COLOR}→ 0x{memory_at_offset} {RESET_COLOR}'
             _stack[5] += f'{BLUE_COLOR} (retOffset) {RESET_COLOR}'
             _stack[6] += f'{BLUE_COLOR} (retSize) {RESET_COLOR}'
+        
+            return title + '\n'.join(_stack) + '\n' + '\n'.join(_more_stack)
+        elif self.curr_opcode.mnemonic == "DELEGATECALL":
+            _more_stack = _stack.split("\n")[7:]
+            _stack = _stack.split("\n")[0:7]
+            
+            gas = int(_stack[0].split(" ")[1],16)
+            argOffset =  int(_stack[2].split(" ")[1],16)
+            argSize   =  int(_stack[3].split(" ")[1],16)
+            
+            argSizeHuge = False
+            
+            if argSize > 50:
+                argSize = 50
+                argSizeHuge = True
+
+            _stack[0] += f' ({gas}) {BLUE_COLOR} (gas) {RESET_COLOR}'
+            _stack[1] += f'{BLUE_COLOR} (target) {RESET_COLOR}'
+            _stack[2] += f'{BLUE_COLOR} (argOffset) {RESET_COLOR}'
+            _stack[3] += f'{BLUE_COLOR} (argSize) {RESET_COLOR}'
+
+            memory_at_offset = self.comp._memory.read(argOffset,argSize).hex()
+            
+            if argSizeHuge:
+                _stack[2] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[4:]}...{RESET_COLOR}'
+            else:
+                _stack[2] += f'{ORANGE_COLOR}→ 0x{memory_at_offset} {RESET_COLOR}'
+            _stack[4] += f'{BLUE_COLOR} (retOffset) {RESET_COLOR}'
+            _stack[5] += f'{BLUE_COLOR} (retSize) {RESET_COLOR}'
+        
+            return title + '\n'.join(_stack) + '\n' + '\n'.join(_more_stack)
+
+        elif self.curr_opcode.mnemonic == "STATICCALL":
+            _more_stack = _stack.split("\n")[7:]
+            _stack = _stack.split("\n")[0:7]
+            
+            gas = int(_stack[0].split(" ")[1],16)
+            argOffset =  int(_stack[2].split(" ")[1],16)
+            argSize   =  int(_stack[3].split(" ")[1],16)
+            
+            argSizeHuge = False
+            
+            if argSize > 50:
+                argSize = 50
+                argSizeHuge = True
+
+            _stack[0] += f' ({gas}) {BLUE_COLOR} (gas) {RESET_COLOR}'
+            _stack[1] += f'{BLUE_COLOR} (target) {RESET_COLOR}'
+            _stack[2] += f'{BLUE_COLOR} (argOffset) {RESET_COLOR}'
+            _stack[3] += f'{BLUE_COLOR} (argSize) {RESET_COLOR}'
+
+            memory_at_offset = self.comp._memory.read(argOffset,argSize).hex()
+            
+            if argSizeHuge:
+                _stack[2] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[4:]}...{RESET_COLOR}'
+            else:
+                _stack[2] += f'{ORANGE_COLOR}→ 0x{memory_at_offset} {RESET_COLOR}'
+            _stack[4] += f'{BLUE_COLOR} (retOffset) {RESET_COLOR}'
+            _stack[5] += f'{BLUE_COLOR} (retSize) {RESET_COLOR}'
         
             return title + '\n'.join(_stack) + '\n' + '\n'.join(_more_stack)
         else:
