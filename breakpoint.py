@@ -3,8 +3,8 @@ import re
 from ethdbg_exceptions import InvalidBreakpointException
 from evm import ALL_EVM_OPCODES, ComputationAPI, OpcodeAPI
 
-ALLOWED_COND_BPS = ['addr', 'saddr', 'op', 'pc']
-BPS_RE_PATTERN = r"(.*)(==|=|!=|>|<|<=|>=)(.*)"
+ALLOWED_COND_BPS = ['addr', 'saddr', 'op', 'pc', 'value']
+BPS_RE_PATTERN = r'([a-zA-Z]*)(==|!=|<=|>=|>|<|=)(.*)'
 ETH_ADDRESS = r'^(0x)?[0-9a-fA-F]{40}$'
 
 class Breakpoint():
@@ -16,7 +16,7 @@ class Breakpoint():
         self.pc = None
         self.op = None
         self.simple_bp = False
-
+        
         # Is this a simple breakpoint?
         # This is the case if len(break_args) == 1 and none of the ALLOWED_COND_BPS is in break_args[0]
         if len(break_args) == 1 and not any(cond_keyword in break_args[0] for cond_keyword in ALLOWED_COND_BPS):
@@ -28,7 +28,8 @@ class Breakpoint():
                 # Is it a valid pc?
                 try:
                     self.pc = int(break_args[0],16)
-                except Exception:
+                except Exception as e:
+                    print(f'Invalid breakpoint condition: {e}. Skipping.')
                     raise InvalidBreakpointException()
         else:
             for break_arg in break_args:
@@ -70,7 +71,7 @@ class Breakpoint():
             return False
 
         # Now we want to check the type of the value given a 'what'
-        if what == 'pc':
+        if what == 'pc' or what == 'value':
             try:
                 int(value,16)
             except Exception:
@@ -96,7 +97,7 @@ class Breakpoint():
         else:
             return False
 
-    def eval_bp(self, comp: ComputationAPI, pc: int, opcode: OpcodeAPI):
+    def eval_bp(self, comp: ComputationAPI, pc: int, opcode: OpcodeAPI, callstack):
         if self.simple_bp:
             if self.op:
                 return opcode.mnemonic == self.op
@@ -139,6 +140,13 @@ class Breakpoint():
                     curr_storage_addr = '0x' + comp.msg.storage_address.hex()
                     value = value.lower()
                     expr = f'{value} {when} {curr_storage_addr}'
+                    if not eval(expr):
+                        return False
+
+                elif what == 'value':
+                    msg_val = int(value,16)
+                    last_frame = callstack[-1]
+                    expr = f'{msg_val} {when} {last_frame.value}'
                     if not eval(expr):
                         return False
                 else:

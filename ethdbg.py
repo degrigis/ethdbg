@@ -370,8 +370,8 @@ class EthDbgShell(cmd.Cmd):
         try:
             bp = Breakpoint(break_args)
             self.breakpoints.append(bp)
-        except InvalidBreakpointException as e:
-            print("Invalid breakpoint")
+        except InvalidBreakpointException:
+            print(f'Invalid breakpoint')
 
     do_b = do_break
 
@@ -795,7 +795,7 @@ class EthDbgShell(cmd.Cmd):
         else:
             # BREAKPOINT MANAGEMENT
             for sbp in self.breakpoints:
-                if sbp.eval_bp(self.comp, pc, opcode):
+                if sbp.eval_bp(self.comp, pc, opcode, self.callstack):
                     self._display_context()
 
         if self.temp_break_finish and len(self.callstack) < self.finish_curr_stack_depth:
