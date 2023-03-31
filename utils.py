@@ -13,6 +13,8 @@ RESET_COLOR = "\033[0m"
 HORIZONTAL_LINE  = "\u2500"
 BOLD_TEXT = "\033[1m"
 
+FOUR_BYTE_URL = "https://raw.githubusercontent.com/ethereum-lists/4bytes/master/signatures/{}"
+
 def get_terminal_size():
     """Return the current terminal size."""
     if platform.system() == "Windows":

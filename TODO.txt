@@ -1,4 +1,3 @@
-1- Sanitization of input for arguments 
 2- Support for Infura
 4- Telescope command and automatic abi decoding for opcodes 
    (e.g., CALL should have its ABI decoded automatically and dereference the offset in memory)
@@ -9,11 +8,13 @@
 11- import storage layout
 12- support for multiple transactions
 13- visualize history of callstack instead of just the current 
-14- Support impersonation of accounts (skip private key check) (just set the msg.sender to specific address)
 15- Add native binary for crypto to speed up the execution. 
-16- Support break by specifying the contract in which you should be
 17- If execution reverts inside a contract, the sstores should be removed!
 20- Support execution of TX from top of block, end, or specific position (more advanced)
     - Executing always at the top might not work in some cases (balance of tokens for a contract)
 21- Add explain to see where a value come from
 22- We have to stub ecrecover and every freaking call that expects that the signer was actually a real account when impersonating.
+23- Modifying storage and memory on demand
+34- tag stack element
+35- do a vmmap command to show current usage of the whole memory!
+36- precise execution (gasPrice and sig verification ON)

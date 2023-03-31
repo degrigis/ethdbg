@@ -9,8 +9,12 @@ import configparser
 import functools
 import os
 import re
+import requests
 import sys
 import sha3
+
+
+from py4byte import signatures as decodesignature
 from breakpoint import Breakpoint, ETH_ADDRESS
 from pyevmasm_fixed import disassemble, disassemble_all, disassemble_hex, disassemble_one, Instruction
 
@@ -141,6 +145,8 @@ class EthDbgShell(cmd.Cmd):
         self.history = list()
         #  The computation object of py-evm
         self.comp = None
+        # The current opcode
+        self.curr_opcode = None
         #  Used for step command
         self.temp_break = False
         #  Whether we want to display the execute ops
@@ -192,6 +198,16 @@ class EthDbgShell(cmd.Cmd):
             print(f'"{HexBytes(arg).decode("utf-8")}"')
         except Exception:
             print(f'Invalid hex string')
+
+    def do_guessfuncid(self, arg):
+        try:
+            guesses = decodesignature(hex_signature=arg)
+            print(f"Possible functions: ")
+            for res in guesses:
+                print(f" → {res['text_signature']}")
+        except Exception as e:
+            print(f'Could not retrieve function signature :(')
+            print(f'{RED_COLOR}{e}{RESET_COLOR}')
 
     def do_funcid(self, arg):
         arg = arg.encode('utf-8')
@@ -317,19 +333,29 @@ class EthDbgShell(cmd.Cmd):
 
     @only_when_started
     def do_sstores(self, arg):
-        # Displat all the sstores issued during the tx
-        for ref_account, sstores in self.sstores.items():
-            print(f'Account: {ref_account}:')
-            for sstore_slot, sstore_val in sstores.items():
+        
+        # Check if there is an argument
+        if arg and arg in self.sstores.keys():
+            sstores_account = self.sstores[arg]
+            for sstore_slot, sstore_val in sstores_account.items():
                 print(f' {YELLOW_COLOR}[w]{RESET_COLOR} Slot: {sstore_slot} | Value: {sstore_val}')
+        else:
+            for ref_account, sstores in self.sstores.items():
+                print(f'Account: {ref_account}:')
+                for sstore_slot, sstore_val in sstores.items():
+                    print(f' {YELLOW_COLOR}[w]{RESET_COLOR} Slot: {sstore_slot} | Value: {sstore_val}')
 
     @only_when_started
     def do_sloads(self, arg):
-        # Displat all the sstores issued during the tx
-        for ref_account, sloads in self.sloads.items():
-            print(f'Account: {ref_account}:')
-            for sload_slot, sload_val in sloads.items():
+        if arg and arg in self.sloads.keys():
+            sloads_account = self.sloads[arg]
+            for sload_slot, sload_val in sloads_account.items():
                 print(f' {CYAN_COLOR}[r]{RESET_COLOR} Slot: {sload_slot} | Value: {hex(sload_val)}')
+        else:
+            for ref_account, sloads in self.sloads.items():
+                print(f'Account: {ref_account}:')
+                for sload_slot, sload_val in sloads.items():
+                    print(f' {CYAN_COLOR}[r]{RESET_COLOR} Slot: {sload_slot} | Value: {hex(sload_val)}')
 
     def do_breaks(self,arg):
         # Print all the breaks
@@ -514,6 +540,9 @@ class EthDbgShell(cmd.Cmd):
         for insn in slice_history:
             _history += '  ' + insn + '\n'
         _history += f'→ {RED_COLOR}{self.history[-1]}{RESET_COLOR}' + '\n'
+        
+        
+        
         return title + _history
 
     def _get_metadata(self):
@@ -567,8 +596,41 @@ class EthDbgShell(cmd.Cmd):
             else:
                 # it's an int
                 _stack += f'{hex(entry_slot)}│ {hex(entry_val)}\n'
+        
+        # Decoration of the stack given the current opcode
+        if self.curr_opcode.mnemonic == "CALL":
+            _more_stack = _stack.split("\n")[7:]
+            _stack = _stack.split("\n")[0:7]
+            
+            gas = int(_stack[0].split(" ")[1],16)
+            value = int(_stack[2].split(" ")[1],16)
+            argOffset =  int(_stack[3].split(" ")[1],16)
+            argSize   =  int(_stack[4].split(" ")[1],16)
+            
+            argSizeHuge = False
+            
+            if argSize > 50:
+                argSize = 50
+                argSizeHuge = True
 
-        return title + _stack
+            _stack[0] += f' ({gas}) {BLUE_COLOR} (gas) {RESET_COLOR}'
+            _stack[1] += f'{BLUE_COLOR} (target) {RESET_COLOR}'
+            _stack[2] += f' ({value}){BLUE_COLOR} (value) {RESET_COLOR}'
+            _stack[3] += f'{BLUE_COLOR} (argOffset) {RESET_COLOR}'
+            _stack[4] += f'{BLUE_COLOR} (argSize) {RESET_COLOR}'
+
+            memory_at_offset = self.comp._memory.read(argOffset,argSize).hex()
+            
+            if argSizeHuge:
+                _stack[3] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[4:]}...{RESET_COLOR}'
+            else:
+                _stack[3] += f'{ORANGE_COLOR}→ 0x{memory_at_offset} {RESET_COLOR}'
+            _stack[5] += f'{BLUE_COLOR} (retOffset) {RESET_COLOR}'
+            _stack[6] += f'{BLUE_COLOR} (retSize) {RESET_COLOR}'
+        
+            return title + '\n'.join(_stack) + '\n' + '\n'.join(_more_stack)
+        else:
+            return title + _stack 
 
     def _get_storage(self):
         ref_account = '0x' + self.comp.msg.storage_address.hex()
@@ -642,6 +704,7 @@ class EthDbgShell(cmd.Cmd):
         # Store a reference to the computation to make it
         # accessible to the comamnds
         self.comp = computation
+        self.curr_opcode = opcode
 
         # the computation.code.__iter__() has already incremented the program counter by 1, account for this
         pc = computation.code.program_counter - 1
