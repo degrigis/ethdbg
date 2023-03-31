@@ -615,11 +615,11 @@ class EthDbgShell(cmd.Cmd):
                 argSize = 50
                 argSizeHuge = True
 
-            _stack[0] += f' ({gas}) {BLUE_COLOR} (gas) {RESET_COLOR}'
-            _stack[1] += f'{BLUE_COLOR} (target) {RESET_COLOR}'
-            _stack[2] += f' ({value}){BLUE_COLOR} (value) {RESET_COLOR}'
-            _stack[3] += f'{BLUE_COLOR} (argOffset) {RESET_COLOR}'
-            _stack[4] += f'{BLUE_COLOR} (argSize) {RESET_COLOR}'
+            _stack[0] += f' ({gas}) {BRIGHT_YELLOW_COLOR} (gas) {RESET_COLOR}'
+            _stack[1] += f'{BRIGHT_YELLOW_COLOR} (target) {RESET_COLOR}'
+            _stack[2] += f' ({value}){BRIGHT_YELLOW_COLOR} (value) {RESET_COLOR}'
+            _stack[3] += f'{BRIGHT_YELLOW_COLOR} (argOffset) {RESET_COLOR}'
+            _stack[4] += f'{BRIGHT_YELLOW_COLOR} (argSize) {RESET_COLOR}'
 
             memory_at_offset = self.comp._memory.read(argOffset,argSize).hex()
             
@@ -627,8 +627,8 @@ class EthDbgShell(cmd.Cmd):
                 _stack[3] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[4:]}...{RESET_COLOR}'
             else:
                 _stack[3] += f'{ORANGE_COLOR}→ 0x{memory_at_offset} {RESET_COLOR}'
-            _stack[5] += f'{BLUE_COLOR} (retOffset) {RESET_COLOR}'
-            _stack[6] += f'{BLUE_COLOR} (retSize) {RESET_COLOR}'
+            _stack[5] += f'{BRIGHT_YELLOW_COLOR} (retOffset) {RESET_COLOR}'
+            _stack[6] += f'{BRIGHT_YELLOW_COLOR} (retSize) {RESET_COLOR}'
         
             return title + '\n'.join(_stack) + '\n' + '\n'.join(_more_stack)
         elif self.curr_opcode.mnemonic == "DELEGATECALL":

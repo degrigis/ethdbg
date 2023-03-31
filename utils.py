@@ -5,6 +5,8 @@ import struct
 RED_COLOR = "\033[31m"
 GREEN_COLOR = "\033[32m"
 YELLOW_COLOR = "\033[33m"
+# Bright yellow
+BRIGHT_YELLOW_COLOR = "\033[38;5;226m"
 BLUE_COLOR = "\033[34m"
 CYAN_COLOR = "\033[36m"
 PURPLE_COLOR = "\033[35m"
