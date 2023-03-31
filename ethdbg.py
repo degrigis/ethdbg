@@ -803,9 +803,9 @@ class EthDbgShell(cmd.Cmd):
 
     def print_license(self):
         print(f"{YELLOW_COLOR}⧫ {BOLD_TEXT}ethdbg 0.1 ⧫ - The CLI Ethereum Debugger{RESET_COLOR}")
-        print("License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>")
-        print("This is free software: you are free to change and redistribute it.")
-        print("There is NO WARRANTY, to the extent permitted by law.\n")
+        print("License: MIT License")
+        print("Copyright (c) [2023] [Shellphish]")
+        print("For a copy, see <https://opensource.org/licenses/MIT>")
 
 # We require a .ethdbg config file in ~/.ethdbg
 # This will pull the account to use for the transaction and related private key
@@ -828,7 +828,7 @@ if __name__ == "__main__":
     ethdbg_conf = get_config()
     w3 = get_w3_provider(args.node_url)
 
-    if args.sender != 0:
+    if args.sender:
         # Validate ETH address using regexp
         if not re.match(ETH_ADDRESS, args.sender):
             print(f"{RED_COLOR}Invalid ETH address provided as sender: {args.sender}{RESET_COLOR}")
