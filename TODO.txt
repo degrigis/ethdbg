@@ -16,3 +16,4 @@
 20- Support execution of TX from top of block, end, or specific position (more advanced)
     - Executing always at the top might not work in some cases (balance of tokens for a contract)
 21- Add explain to see where a value come from
+22- We have to stub ecrecover and every freaking call that expects that the signer was actually a real account when impersonating.

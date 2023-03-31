@@ -532,7 +532,7 @@ class EthDbgShell(cmd.Cmd):
         gas_remaining = self.comp.get_gas_remaining()
         gas_used = self.comp.get_gas_used()
         gas_limit = self.comp.state.gas_limit
-
+        
         _metadata = f'Current Code Account: {YELLOW_COLOR}{curr_account_code}{RESET_COLOR} | Current Storage Account: {YELLOW_COLOR}{curr_account_storage}{RESET_COLOR}\n'
         _metadata += f'Balance: {curr_balance} wei | Gas Remaining: {gas_remaining} | Gas Used: {gas_used} | Gas Limit: {gas_limit}'
 
@@ -679,7 +679,8 @@ class EthDbgShell(cmd.Cmd):
             self.temp_break_finish = False
             self.finish_curr_stack_depth = None
             self._display_context()
-        elif opcode.mnemonic == "STOP":
+
+        elif opcode.mnemonic == "STOP" or opcode.mnemonic == "RETURN" and len(self.callstack) == 1: 
             self._display_context()
 
         if opcode.mnemonic == "SSTORE":

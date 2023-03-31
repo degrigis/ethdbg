@@ -380,7 +380,7 @@ def get_vm_for_block(chain_id, block_number: int, hook: OpcodeHook = None) -> ty
 
     TargetStateClass = TargetVM.get_state_class()
     TargetAccountDBClass = TargetStateClass.get_account_db_class()
-    
+
     class MyAccountDb(TargetAccountDBClass):
         """
         Stub account db that adds awareness of geth's storage pattern
@@ -428,16 +428,15 @@ def get_vm_for_block(chain_id, block_number: int, hook: OpcodeHook = None) -> ty
         """only used to pass account db stub"""
         account_db_class: typing.Type[AccountDatabaseAPI] = MyAccountDb
 
-    class MyVM(TargetVM):
-        """only used to pass account db stub (via MyStateClass)"""
-        _state_class: typing.Type[BaseState] = MyStateClass
-
         # Stub this if you want to skip signature verification.
         def validate_transaction(
             self,
-            transaction: SignedTransactionAPI
-        ) -> None:
+            transaction: SignedTransactionAPI):
             return True
+
+    class MyVM(TargetVM):
+        """only used to pass account db stub (via MyStateClass)"""
+        _state_class: typing.Type[BaseState] = MyStateClass
 
         def validate_transaction_against_header(*args, **kwargs):
             # Never check for gasPrice.
