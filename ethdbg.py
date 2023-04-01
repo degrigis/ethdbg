@@ -68,15 +68,9 @@ def get_evm(w3, block_number, myhook):
 
     return vm, header
 
-DEBUGGED = set()
 def get_source_code(debug_target: TransactionDebugTarget, contract_address: HexBytes, pc: int):
 
     contract_address = normalize_contract_address(contract_address)
-
-    global DEBUGGED
-    if contract_address not in DEBUGGED:
-        DEBUGGED.add(contract_address)
-        import ipdb; ipdb.set_trace()
 
     registry = contract_registry()
     contract = registry.get(contract_address)
