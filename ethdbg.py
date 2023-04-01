@@ -372,7 +372,7 @@ class EthDbgShell(cmd.Cmd):
             self.breakpoints.append(bp)
         except InvalidBreakpointException:
             print(f'{RED_COLOR}Invalid breakpoint{RESET_COLOR}:') 
-            print(f'{RED_COLOR} Valid syntax is: <what><when><value>,<what><when><value>') 
+            print(f'{RED_COLOR} Valid syntax is: <what><when><value>,<what><when><value>{RESET_COLOR}') 
             print(f'{RED_COLOR}  <when> in (=, ==, !=, >, <, >=, <=){RESET_COLOR}')
             print(f'{RED_COLOR}  <what> in (addr, saddr, op, pc, value){RESET_COLOR}')
     do_b = do_break
