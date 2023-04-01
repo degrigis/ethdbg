@@ -9,14 +9,13 @@ import configparser
 import functools
 import os
 import re
-import requests
 import sys
 import sha3
-
+from breakpoint import Breakpoint, ETH_ADDRESS
 
 from py4byte import signatures as decodesignature
-from breakpoint import Breakpoint, ETH_ADDRESS
-from pyevmasm_fixed import disassemble, disassemble_all, disassemble_hex, disassemble_one, Instruction
+from ethpwn.prelude import *
+from ethpwn.pyevmasm_fixed import disassemble_one, Instruction
 
 from evm import *
 from transaction_debug_target import TransactionDebugTarget
@@ -27,11 +26,11 @@ DEFAULT_NODE_URL = "ws://172.17.0.1:8546"
 
 def get_w3_provider(web3_host):
     if web3_host.startswith('http'):
-        provider = web3.HTTPProvider(
-            web3_host,
+        context.connect_http(
+            web3_host
         )
     elif web3_host.startswith('ws'):
-        provider = web3.WebsocketProvider(
+        context.connect_websocket(
             web3_host,
             websocket_timeout=60 * 5,
             websocket_kwargs={
@@ -41,7 +40,7 @@ def get_w3_provider(web3_host):
     else:
         raise Exception("Unknown web3 provider")
 
-    w3 = web3.Web3(provider)
+    w3 = context.w3
     assert w3.is_connected()
     return w3
 
@@ -69,6 +68,31 @@ def get_evm(w3, block_number, myhook):
 
     return vm, header
 
+DEBUGGED = set()
+def get_source_code(debug_target: TransactionDebugTarget, contract_address: HexBytes, pc: int):
+
+    contract_address = normalize_contract_address(contract_address)
+
+    global DEBUGGED
+    if contract_address not in DEBUGGED:
+        DEBUGGED.add(contract_address)
+        import ipdb; ipdb.set_trace()
+
+    registry = contract_registry()
+    contract = registry.get(contract_address)
+
+    if contract is None:
+        return None
+
+
+
+    if debug_target.target_address is None or int.from_bytes(HexBytes(debug_target.target_address), byteorder='big') == 0:
+        closest_instruction_idx = contract.metadata.closest_instruction_index_for_constructor_pc(pc, fork=debug_target.fork)
+        source_info = contract.metadata.source_info_for_constructor_instruction_idx(closest_instruction_idx)
+    else:
+        closest_instruction_idx = contract.metadata.closest_instruction_index_for_runtime_pc(pc, fork=debug_target.fork)
+        source_info = contract.metadata.source_info_for_runtime_instruction_idx(closest_instruction_idx)
+    return source_info.pretty_print_source()
 def get_config():
     # Parse file using ConfigParser
     config = configparser.ConfigParser()
@@ -93,9 +117,9 @@ class EthDbgShell(cmd.Cmd):
     intro = '\nType help or ? to list commands.\n'
     prompt = f'{RED_COLOR}ethdbg{RESET_COLOR}➤ '
 
-    def __init__(self, ethdbg_conf, w3, debug_target):
+    def __init__(self, ethdbg_conf, w3, debug_target, **kwargs):
         # call the parent class constructor
-        super().__init__()
+        super().__init__(**kwargs)
 
         # The config for ethdbg
         self.tty_rows, self.tty_columns = get_terminal_size()
@@ -114,7 +138,7 @@ class EthDbgShell(cmd.Cmd):
             to='0x0',
             origin=self.debug_target.source_address,
             sender=self.debug_target.source_address,
-            nonce=self.w3.eth.get_transaction_count(self.debug_target.source_address),  
+ nonce=self.w3.eth.get_transaction_count(self.debug_target.source_address),  
         )
 
         # The *CALL trace between contracts
@@ -508,8 +532,8 @@ class EthDbgShell(cmd.Cmd):
         title = f'{message:{fill}{align}{width}}'+'\n'
 
         calls_view = ''
-        max_call_opcode_length = max(len('CallType'), max(len(call.calltype) for call in self.callstack))
-        max_pc_length = max(len('CallSite'), max(len(call.callsite) for call in self.callstack))
+        max_call_opcode_length = max(len('CallType'), max((len(call.calltype) for call in self.callstack), default=0))
+        max_pc_length = max(len('CallSite'), max((len(call.callsite) for call in self.callstack), default=0))
         calltype_string_legend = 'CallType'.ljust(max_call_opcode_length)
         callsite_string_legend = 'CallSite'.rjust(max_pc_length)
         legend = f'{"[ Legend: Address":42} | {calltype_string_legend} | {callsite_string_legend} | {"msg.sender":42} | msg.value ]\n'
@@ -752,11 +776,32 @@ class EthDbgShell(cmd.Cmd):
         print(f'Chain: {self.debug_target.chain} | Node: {self.w3.provider.endpoint_uri} | Block Number: {self.debug_target.block_number}')
         print(f'Value: {self.debug_target.value} | Gas: {self.debug_target.gas}')
 
+    def _get_source_view(self):
+        # import ipdb; ipdb.set_trace()
+        message = f"{GREEN_COLOR}Source View{RESET_COLOR}"
+        fill = HORIZONTAL_LINE
+        align = '<'
+        width = max(self.tty_columns,0)
+
+        title = f'{message:{fill}{align}{width}}'
+
+        assert self.started, "Debugger not started yet."
+
+        # print the chain context and the transaction context
+        # import ipdb; ipdb.set_trace()
+        source = get_source_code(self.debug_target, self.comp.msg.code_address, self.comp.code.program_counter - 1)
+        if source is not None:
+            return title + '\n' + source + '\n'
+        else:
+            return None
     def _display_context(self, cmdloop=True):
         metadata_view = self._get_metadata()
         print(metadata_view)
         disass_view = self._get_disass()
         print(disass_view)
+        source_view = self._get_source_view()
+        if source_view is not None:
+            print(source_view)
         stack_view = self._get_stack()
         print(stack_view)
         callstack_view = self._get_callstack()
