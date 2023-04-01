@@ -225,7 +225,7 @@ class TransactionDebugTarget:
         if max_priority_fee_per_gas is not None:
             self._max_priority_fee_per_gas = max_priority_fee_per_gas
 
-    def replay_transaction(self, txid, **kwargs) -> 'TransactionDebugTarget':
+    def replay_transaction(self, txid, ethdbg_conf, **kwargs) -> 'TransactionDebugTarget':
         assert txid is not None
         txid = HexBytes(txid).hex()
 
@@ -258,15 +258,19 @@ class TransactionDebugTarget:
         
         return self
 
-    def new_transaction(self, to, calldata, **kwargs):
+    def new_transaction(self, to, calldata, ethdbg_conf, **kwargs):
         self.target_address = to
         self.calldata = calldata
 
         # TODO pull default account and private key from ethpwn
-        self.source_address = kwargs.pop('sender', None)
+        self.source_address = kwargs.pop('sender', None) or ethdbg_conf['user.account']['address']
         self.block_number = kwargs.pop('block_number', self.w3.eth.block_number)
+        
+        if type(self.block_number) == str:
+            self.block_number = int(self.block_number, 10)
+
         self.chain = kwargs.pop('chain', hex(self.w3.eth.chain_id))
-        self.fork = kwargs.pop('fork', self.w3.eth.fork)
+        self.chain_id = self.w3.eth.chain_id
 
         for k, v in kwargs.items():
             if v is None:

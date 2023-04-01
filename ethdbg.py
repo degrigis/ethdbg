@@ -1011,11 +1011,11 @@ if __name__ == "__main__":
     if args.txid:
         # replay transaction mode
         debug_target = TransactionDebugTarget(w3)
-        debug_target.replay_transaction(args.txid, chain=args.chain, sender=args.sender, to=args.target, block_number=args.block, calldata=args.calldata)
+        debug_target.replay_transaction(args.txid, chain=args.chain, sender=args.sender, to=args.target, block_number=args.block, calldata=args.calldata, ethdbg_conf=ethdbg_conf)
     else:
         # interactive mode
         debug_target = TransactionDebugTarget(w3)
-        debug_target.new_transaction(to=args.target, sender=args.sender, calldata=args.calldata, chain=args.chain, block_number=args.block)
+        debug_target.new_transaction(to=args.target, sender=args.sender, calldata=args.calldata, chain=args.chain, block_number=args.block, ethdbg_conf=ethdbg_conf)
 
     ethdbgshell = EthDbgShell(ethdbg_conf, w3, debug_target=debug_target)
     ethdbgshell.print_license()
