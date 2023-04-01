@@ -59,7 +59,7 @@ def get_evm(w3, block_number, myhook):
 
     old_block = w3.eth.get_block(block_number-1)
     state_root = bytes(old_block['stateRoot'])
-    
+
     header = vm.get_header()
     header = header.copy(gas_used = 0, state_root=state_root)
     execution_context = vm.create_execution_context(
@@ -109,7 +109,7 @@ class CallFrame():
         self.value = value
         self.calltype = calltype
         self.callsite = callsite
-        
+
 ORIGINAL_extract_transaction_sender = eth._utils.transactions.extract_transaction_sender
 
 class EthDbgShell(cmd.Cmd):
@@ -128,7 +128,7 @@ class EthDbgShell(cmd.Cmd):
 
         # EVM stuff
         self.w3 = w3
-        
+
         self.debug_target: TransactionDebugTarget = debug_target
         self.debug_target.set_defaults(
             gas=6_000_000, # silly default value
@@ -138,7 +138,7 @@ class EthDbgShell(cmd.Cmd):
             to='0x0',
             origin=self.debug_target.source_address,
             sender=self.debug_target.source_address,
- nonce=self.w3.eth.get_transaction_count(self.debug_target.source_address),  
+ nonce=self.w3.eth.get_transaction_count(self.debug_target.source_address),
         )
 
         # The *CALL trace between contracts
@@ -234,7 +234,7 @@ class EthDbgShell(cmd.Cmd):
             print(f'{RED_COLOR}{e}{RESET_COLOR}')
 
     do_guess = do_guessfuncid
-    
+
     def do_funcid(self, arg):
         arg = arg.encode('utf-8')
         k = sha3.keccak_256()
@@ -272,15 +272,15 @@ class EthDbgShell(cmd.Cmd):
         else:
             eth._utils.transactions.extract_transaction_sender = ORIGINAL_extract_transaction_sender
         vm, header = get_evm(self.w3, self.debug_target.block_number, self._myhook)
-            
+
         assert self.debug_target.fork is None or self.debug_target.fork == vm.fork
         self.debug_target.set_default('fork', vm.fork)
 
         txn = self.debug_target.get_transaction_dict()
         raw_txn = bytes(self.account.sign_transaction(txn).rawTransaction)
-        
+
         txn = vm.get_transaction_builder().decode(raw_txn)
-        
+
         self.started = True
 
         origin_callframe = CallFrame(
@@ -293,7 +293,7 @@ class EthDbgShell(cmd.Cmd):
         self.callstack.append(origin_callframe)
 
         self.temp_break = True
-        
+
         receipt, comp = vm.apply_transaction(
             header=header,
             transaction=txn,
@@ -359,7 +359,7 @@ class EthDbgShell(cmd.Cmd):
 
     @only_when_started
     def do_sstores(self, arg):
-        
+
         # Check if there is an argument
         if arg and arg in self.sstores.keys():
             sstores_account = self.sstores[arg]
@@ -395,8 +395,8 @@ class EthDbgShell(cmd.Cmd):
             bp = Breakpoint(break_args)
             self.breakpoints.append(bp)
         except InvalidBreakpointException:
-            print(f'{RED_COLOR}Invalid breakpoint{RESET_COLOR}:') 
-            print(f'{RED_COLOR} Valid syntax is: <what><when><value>,<what><when><value>{RESET_COLOR}') 
+            print(f'{RED_COLOR}Invalid breakpoint{RESET_COLOR}:')
+            print(f'{RED_COLOR} Valid syntax is: <what><when><value>,<what><when><value>{RESET_COLOR}')
             print(f'{RED_COLOR}  <when> in (=, ==, !=, >, <, >=, <=){RESET_COLOR}')
             print(f'{RED_COLOR}  <what> in (addr, saddr, op, pc, value){RESET_COLOR}')
     do_b = do_break
@@ -507,9 +507,9 @@ class EthDbgShell(cmd.Cmd):
             return
         else:
             try:
-                # check  if lenght is a decimal number or hex number 
+                # check  if lenght is a decimal number or hex number
                 offset, length = args.split(" ")[0], args.split(" ")[1]
-                
+
                 if read_args[1].startswith("0x"):
                     length = int(read_args[1],16)
                 else:
@@ -577,9 +577,9 @@ class EthDbgShell(cmd.Cmd):
         for insn in slice_history:
             _history += '  ' + insn + '\n'
         _history += f'→ {RED_COLOR}{self.history[-1]}{RESET_COLOR}' + '\n'
-        
-        
-        
+
+
+
         return title + _history
 
     def _get_metadata(self):
@@ -598,7 +598,7 @@ class EthDbgShell(cmd.Cmd):
         gas_remaining = self.comp.get_gas_remaining()
         gas_used = self.comp.get_gas_used()
         gas_limit = self.comp.state.gas_limit
-        
+
         _metadata = f'Current Code Account: {YELLOW_COLOR}{curr_account_code}{RESET_COLOR} | Current Storage Account: {YELLOW_COLOR}{curr_account_storage}{RESET_COLOR}\n'
         _metadata += f'Balance: {curr_balance} wei | Gas Remaining: {gas_remaining} | Gas Used: {gas_used} | Gas Limit: {gas_limit}'
 
@@ -633,19 +633,19 @@ class EthDbgShell(cmd.Cmd):
             else:
                 # it's an int
                 _stack += f'{hex(entry_slot)}│ {hex(entry_val)}\n'
-        
+
         # Decoration of the stack given the current opcode
         if self.curr_opcode.mnemonic == "CALL":
             _more_stack = _stack.split("\n")[7:]
             _stack = _stack.split("\n")[0:7]
-            
+
             gas = int(_stack[0].split(" ")[1],16)
             value = int(_stack[2].split(" ")[1],16)
             argOffset =  int(_stack[3].split(" ")[1],16)
             argSize   =  int(_stack[4].split(" ")[1],16)
-            
+
             argSizeHuge = False
-            
+
             if argSize > 50:
                 argSize = 50
                 argSizeHuge = True
@@ -657,25 +657,25 @@ class EthDbgShell(cmd.Cmd):
             _stack[4] += f'{BRIGHT_YELLOW_COLOR} (argSize) {RESET_COLOR}'
 
             memory_at_offset = self.comp._memory.read(argOffset,argSize).hex()
-            
+
             if argSizeHuge:
                 _stack[3] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[4:]}...{RESET_COLOR}'
             else:
                 _stack[3] += f'{ORANGE_COLOR}→ 0x{memory_at_offset} {RESET_COLOR}'
             _stack[5] += f'{BRIGHT_YELLOW_COLOR} (retOffset) {RESET_COLOR}'
             _stack[6] += f'{BRIGHT_YELLOW_COLOR} (retSize) {RESET_COLOR}'
-        
+
             return title + '\n'.join(_stack) + '\n' + '\n'.join(_more_stack)
         elif self.curr_opcode.mnemonic == "DELEGATECALL":
             _more_stack = _stack.split("\n")[7:]
             _stack = _stack.split("\n")[0:7]
-            
+
             gas = int(_stack[0].split(" ")[1],16)
             argOffset =  int(_stack[2].split(" ")[1],16)
             argSize   =  int(_stack[3].split(" ")[1],16)
-            
+
             argSizeHuge = False
-            
+
             if argSize > 50:
                 argSize = 50
                 argSizeHuge = True
@@ -686,26 +686,26 @@ class EthDbgShell(cmd.Cmd):
             _stack[3] += f'{BLUE_COLOR} (argSize) {RESET_COLOR}'
 
             memory_at_offset = self.comp._memory.read(argOffset,argSize).hex()
-            
+
             if argSizeHuge:
                 _stack[2] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[4:]}...{RESET_COLOR}'
             else:
                 _stack[2] += f'{ORANGE_COLOR}→ 0x{memory_at_offset} {RESET_COLOR}'
             _stack[4] += f'{BLUE_COLOR} (retOffset) {RESET_COLOR}'
             _stack[5] += f'{BLUE_COLOR} (retSize) {RESET_COLOR}'
-        
+
             return title + '\n'.join(_stack) + '\n' + '\n'.join(_more_stack)
 
         elif self.curr_opcode.mnemonic == "STATICCALL":
             _more_stack = _stack.split("\n")[7:]
             _stack = _stack.split("\n")[0:7]
-            
+
             gas = int(_stack[0].split(" ")[1],16)
             argOffset =  int(_stack[2].split(" ")[1],16)
             argSize   =  int(_stack[3].split(" ")[1],16)
-            
+
             argSizeHuge = False
-            
+
             if argSize > 50:
                 argSize = 50
                 argSizeHuge = True
@@ -716,17 +716,17 @@ class EthDbgShell(cmd.Cmd):
             _stack[3] += f'{BLUE_COLOR} (argSize) {RESET_COLOR}'
 
             memory_at_offset = self.comp._memory.read(argOffset,argSize).hex()
-            
+
             if argSizeHuge:
                 _stack[2] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[4:]}...{RESET_COLOR}'
             else:
                 _stack[2] += f'{ORANGE_COLOR}→ 0x{memory_at_offset} {RESET_COLOR}'
             _stack[4] += f'{BLUE_COLOR} (retOffset) {RESET_COLOR}'
             _stack[5] += f'{BLUE_COLOR} (retSize) {RESET_COLOR}'
-        
+
             return title + '\n'.join(_stack) + '\n' + '\n'.join(_more_stack)
         else:
-            return title + _stack 
+            return title + _stack
 
     def _get_storage(self):
         ref_account = '0x' + self.comp.msg.storage_address.hex()
@@ -860,7 +860,7 @@ class EthDbgShell(cmd.Cmd):
             self.finish_curr_stack_depth = None
             self._display_context()
 
-        elif opcode.mnemonic == "STOP" or opcode.mnemonic == "RETURN" and len(self.callstack) == 1: 
+        elif opcode.mnemonic == "STOP" or opcode.mnemonic == "RETURN" and len(self.callstack) == 1:
             self._display_context()
 
         if opcode.mnemonic == "SSTORE":
