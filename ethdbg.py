@@ -659,9 +659,9 @@ class EthDbgShell(cmd.Cmd):
             memory_at_offset = self.comp._memory.read(argOffset,argSize).hex()
 
             if argSizeHuge:
-                _stack[3] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[4:]}...{RESET_COLOR}'
+                _stack[3] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[8:]}...{RESET_COLOR}'
             else:
-                _stack[3] += f'{ORANGE_COLOR}→ 0x{memory_at_offset} {RESET_COLOR}'
+                _stack[3] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[8:]}{RESET_COLOR}'
             _stack[5] += f'{BRIGHT_YELLOW_COLOR} (retOffset) {RESET_COLOR}'
             _stack[6] += f'{BRIGHT_YELLOW_COLOR} (retSize) {RESET_COLOR}'
 
