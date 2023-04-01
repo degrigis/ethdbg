@@ -366,13 +366,15 @@ class EthDbgShell(cmd.Cmd):
 
     def do_break(self, arg):
         # parse the arg
-        break_args = arg.split(" ")
+        break_args = arg.split(",")
         try:
             bp = Breakpoint(break_args)
             self.breakpoints.append(bp)
         except InvalidBreakpointException:
-            print(f'Invalid breakpoint')
-
+            print(f'{RED_COLOR}Invalid breakpoint{RESET_COLOR}:') 
+            print(f'{RED_COLOR} Valid syntax is: <what><when><value>,<what><when><value>') 
+            print(f'{RED_COLOR}  <when> in (=, ==, !=, >, <, >=, <=){RESET_COLOR}')
+            print(f'{RED_COLOR}  <what> in (addr, saddr, op, pc, value){RESET_COLOR}')
     do_b = do_break
 
     @only_when_started

@@ -33,6 +33,7 @@ class Breakpoint():
                     raise InvalidBreakpointException()
         else:
             for break_arg in break_args:
+                break_arg = break_arg.replace(' ', '')
                 matches = re.findall(BPS_RE_PATTERN, break_arg)[0]
                 if len(matches) != 3:
                     print(f"Invalid breakpoint condition {break_arg}. Skipping.")
