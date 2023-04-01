@@ -45,7 +45,7 @@ OpcodeHook = typing.Callable[[Opcode, ComputationAPI], typing.Any]
 
 
 CALL_OPCODES = ['CALL', 'CALLCODE', 'DELEGATECALL', 'STATICCALL', 'CREATE', 'CREATE2']
-RETURN_OPCODES = ['RETURN', 'REVERT']
+RETURN_OPCODES = ['RETURN', 'REVERT', 'STOP']
 ALL_EVM_OPCODES = [                                                                                                                                                                            
      'STOP',                                                                                                                                                                            
      'ADD',                                                                                                                                                                             

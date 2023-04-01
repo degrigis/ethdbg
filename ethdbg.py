@@ -482,9 +482,18 @@ class EthDbgShell(cmd.Cmd):
             print("Usage: memory <offset> <length>")
             return
         else:
-            offset, length = args.split(" ")[0], args.split(" ")[1]
-            print(f'{self.comp._memory.read(int(offset,16), int(length,10)).hex()}')
+            try:
+                # check  if lenght is a decimal number or hex number 
+                offset, length = args.split(" ")[0], args.split(" ")[1]
+                
+                if read_args[1].startswith("0x"):
+                    length = int(read_args[1],16)
+                else:
+                    length = int(read_args[1],10)
 
+                print(f'{self.comp._memory.read(int(offset,16), length).hex()}')
+            except Exception as e:
+                print(f'{RED_COLOR}Error reading memory: {e}{RESET_COLOR}')
     # INTERNALS
     def _resume(self):
         raise ExitCmdException()
