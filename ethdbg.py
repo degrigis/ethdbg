@@ -963,7 +963,7 @@ class EthDbgShell(cmd.Cmd):
         callstack_view = self._get_callstack()
         print(callstack_view)
         storage_layout_view = self._get_storage_layout_view()
-        if storage_layout_view is not None:
+        if storage_layout_view is not None and "None" not in storage_layout_view:
             print(storage_layout_view)
         storage_view = self._get_storage()
         print(storage_view)
