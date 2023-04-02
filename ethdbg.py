@@ -88,6 +88,8 @@ def get_source_code(debug_target: TransactionDebugTarget, contract_address: HexB
     else:
         closest_instruction_idx = contract.metadata.closest_instruction_index_for_runtime_pc(pc, fork=debug_target.fork)
         source_info = contract.metadata.source_info_for_runtime_instruction_idx(closest_instruction_idx)
+    if source_info is None:
+        return None
     return source_info.pretty_print_source(context_lines=1)
 
 
@@ -919,7 +921,7 @@ class EthDbgShell(cmd.Cmd):
         # import ipdb; ipdb.set_trace()
         source = get_source_code(self.debug_target, self.comp.msg.code_address, self.comp.code.program_counter - 1)
         if source is not None:
-            return title + '\n' + source + '\n'
+            return title + '\n' + source
         else:
             return None
 
