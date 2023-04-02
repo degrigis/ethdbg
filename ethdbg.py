@@ -944,10 +944,10 @@ class EthDbgShell(cmd.Cmd):
             self.comp.msg.storage_address
             )
 
-        with rich.get_console().capture() as capture:
-            rich.print(storage_layout)
-        storage_layout = capture.get()
         if storage_layout is not None:
+            with rich.get_console().capture() as capture:
+                rich.print(storage_layout)
+            storage_layout = capture.get()
             return title + '\n' + storage_layout + '\n'
         else:
             return None
@@ -965,7 +965,7 @@ class EthDbgShell(cmd.Cmd):
         callstack_view = self._get_callstack()
         print(callstack_view)
         storage_layout_view = self._get_storage_layout_view()
-        if storage_layout_view is not None and "None" not in storage_layout_view:
+        if storage_layout_view is not None:
             print(storage_layout_view)
         storage_view = self._get_storage()
         print(storage_view)
