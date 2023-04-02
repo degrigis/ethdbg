@@ -16,7 +16,7 @@ class Breakpoint():
         self.pc = None
         self.op = None
         self.simple_bp = False
-        
+
         # Is this a simple breakpoint?
         # This is the case if len(break_args) == 1 and none of the ALLOWED_COND_BPS is in break_args[0]
         if len(break_args) == 1 and not any(cond_keyword in break_args[0] for cond_keyword in ALLOWED_COND_BPS):
@@ -128,7 +128,7 @@ class Breakpoint():
                     if not eval(expr):
                         return False
 
-                elif what == 'addr':
+                elif what.strip() in {'addr', 'code_addr', 'code_address', 'code'}:
                     # Warning: this is not checksummed
                     curr_code_addr = '0x' + comp.msg.code_address.hex()
                     value = value.lower()
@@ -136,7 +136,7 @@ class Breakpoint():
                     if not eval(expr):
                         return False
 
-                elif what == 'saddr':
+                elif what.strip() in {'saddr', 'storage_addr', 'storage_address'}:
                     # Warning: this is not checksummed
                     curr_storage_addr = '0x' + comp.msg.storage_address.hex()
                     value = value.lower()

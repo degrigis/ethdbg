@@ -2,6 +2,7 @@
 import cmd
 from typing import List
 from hexbytes import HexBytes
+import rich
 
 import web3
 import argparse
@@ -21,6 +22,9 @@ from evm import *
 from transaction_debug_target import TransactionDebugTarget
 from utils import *
 from ethdbg_exceptions import *
+
+from rich import print as rich_print, inspect as rich_inspect
+from rich.table import Table
 
 DEFAULT_NODE_URL = "ws://172.17.0.1:8546"
 
@@ -78,15 +82,145 @@ def get_source_code(debug_target: TransactionDebugTarget, contract_address: HexB
     if contract is None:
         return None
 
-
-
     if debug_target.target_address is None or int.from_bytes(HexBytes(debug_target.target_address), byteorder='big') == 0:
         closest_instruction_idx = contract.metadata.closest_instruction_index_for_constructor_pc(pc, fork=debug_target.fork)
         source_info = contract.metadata.source_info_for_constructor_instruction_idx(closest_instruction_idx)
     else:
         closest_instruction_idx = contract.metadata.closest_instruction_index_for_runtime_pc(pc, fork=debug_target.fork)
         source_info = contract.metadata.source_info_for_runtime_instruction_idx(closest_instruction_idx)
-    return source_info.pretty_print_source()
+    return source_info.pretty_print_source(context_lines=1)
+
+
+def read_storage_typed_value(read_storage, storage_layout, storage_value):
+
+    storage_type = storage_layout['types'][storage_value['type']]
+
+    # read_storage = function taking a slot and returning a value
+    if storage_type['encoding'] == 'inplace':
+        assert int(storage_type['numberOfBytes']) <= 32, "Don't know how to handle this yet"
+        value = read_storage(int(storage_value['slot']))
+        # lower-order-alignment means it's easier to flip it, index, flip it back
+        value = value[::-1]
+        value = value[int(storage_value['offset']):int(storage_value['offset']) + int(storage_type['numberOfBytes'])]
+        value = value[::-1]
+        # TODO format it out of the bytes based on the label?
+        if storage_type['label'] == 'address' or storage_type['label'].split()[0] == 'contract':
+            return HexBytes(value).hex()
+        elif storage_type['label'] == 'uint256':
+            return int.from_bytes(value, byteorder='big')
+        else:
+            assert False, "Don't know how to handle this yet"
+        return HexBytes(value)
+
+    elif storage_type['encoding'] == 'mapping':
+
+        # TODO implement and print this:
+        '''
+        The value corresponding to a mapping key k is located at keccak256(h(k) . p) where . is concatenation and h is a function that is applied to the key depending on its type:
+
+        for value types, h pads the value to 32 bytes in the same way as when storing the value in memory.
+
+        for strings and byte arrays, h(k) is just the unpadded data.
+
+        '''
+        slot = int(storage_value['slot'])
+        return None
+
+    elif storage_type['encoding'] == 'dynamic_array':
+        num_elements = read_storage(int(storage_value['slot']))
+        num_elements = int.from_bytes(num_elements, byteorder='big')
+        element_type = storage_layout['types'][storage_type['base']]
+        element_size = int(element_type['numberOfBytes'])
+        num_slots = (num_elements * element_size) // 32
+        slot_start = keccak(int.to_bytes(int(storage_value['slot']), 32, byteorder='big'))
+        # TODO decode more
+        slots = [HexBytes(read_storage(slot_start + i)) for i in range(num_slots)]
+        return {
+            'data_start_slot': slot_start,
+            'num_elements': num_elements,
+            'element_type': element_type,
+            'slots': slots,
+        }
+
+    elif storage_type['encoding'] == 'bytes':
+        slot = read_storage(int(storage_value['slot']))
+
+        if slot[-1] & 1 == 0:
+            length = slot[-1] // 2
+            assert length <= 31
+            data_read = HexBytes(slot[:length]) # inplace bytes, less than 32 bytes in length
+        else:
+            length = int.from_bytes(slot, byteorder='big') // 2
+            num_slots = (length + 31) // 32
+            slots = [read_storage(int(storage_value['slot']) + i) for i in range(num_slots)]
+            data_read = HexBytes(b''.join(slots))
+        if storage_type['label'] == 'string':
+            data_read = data_read.decode('utf-8')
+        else:
+            assert storage_type['label'] == 'bytes'
+        return data_read
+
+    else:
+        raise Exception(f'Unknown storage encoding {storage_type["encoding"]}')
+
+
+def _get_storage_layout_table_for(read_storage, title, storage_layout, contract_address=None):
+    if title is None:
+        if contract_address is None:
+            title = "Storage layout"
+        else:
+            title = f"Storage layout for {contract_address}"
+    table = Table(title=title, show_header=True, header_style="bold magenta")
+    table.add_column("Name")
+    table.add_column("Type", style='dim')
+    table.add_column("Slot", style='dim')
+    table.add_column("Offset", style='dim')
+    table.add_column("Value")
+    table.add_column("Contract")
+
+    for storage_value in sorted(storage_layout['storage'], key=lambda x: int(x['slot'])):
+        type = storage_value['type']
+        value = read_storage_typed_value(read_storage, storage_layout, storage_value)
+        table.add_row(
+            storage_value['label'],
+            storage_layout['types'][type]['label'],
+            str(int(storage_value['slot'])),
+            str(int(storage_value['offset'])),
+            repr(value),
+            os.path.basename(storage_value['contract']),
+        )
+    return table
+
+def get_storage_layout_table_for(read_storage, contract_address: HexBytes):
+    contract_address = normalize_contract_address(contract_address)
+    registry = contract_registry()
+    contract = registry.get(contract_address)
+    if contract is None:
+        return None
+    storage_layout = contract.metadata.storage_layout
+    if storage_layout is None:
+        return None
+    return _get_storage_layout_table_for(read_storage, f"Storage layout as interpreted by {contract_address}", storage_layout, contract_address)
+
+def get_storage_layout_table(read_storage, code_contract_address, storage_contract_address):
+    table_code: Table = get_storage_layout_table_for(read_storage, code_contract_address)
+    if code_contract_address == storage_contract_address:
+        return table_code
+    table_storage: Table = get_storage_layout_table_for(read_storage, storage_contract_address)
+    if table_code is None and table_storage is None:
+        return None
+    if table_code is None:
+        return table_storage
+    if table_storage is None:
+        return table_code
+
+    table = Table(title="Storage layout", show_header=True, header_style="bold magenta")
+    table.add_column("Contract")
+    table.add_column("Storage")
+    table.add_row('Code', table_code)
+    table.add_row('Storage', table_storage)
+    return table
+
 def get_config():
     # Parse file using ConfigParser
     config = configparser.ConfigParser()
@@ -788,6 +922,34 @@ class EthDbgShell(cmd.Cmd):
             return title + '\n' + source + '\n'
         else:
             return None
+
+    def _get_storage_layout_view(self):
+        # import ipdb; ipdb.set_trace()
+        message = f"{GREEN_COLOR}Storage Layout{RESET_COLOR}"
+        fill = HORIZONTAL_LINE
+        align = '<'
+        width = max(self.tty_columns,0)
+
+        title = f'{message:{fill}{align}{width}}'
+
+        assert self.started, "Debugger not started yet."
+
+        # print the chain context and the transaction context
+        # import ipdb; ipdb.set_trace()
+        storage_layout = get_storage_layout_table(
+            lambda slot: self.comp.state.get_storage(self.comp.msg.storage_address, slot).to_bytes(32, byteorder='big'),
+            self.comp.msg.code_address,
+            self.comp.msg.storage_address
+            )
+
+        with rich.get_console().capture() as capture:
+            rich.print(storage_layout)
+        storage_layout = capture.get()
+        if storage_layout is not None:
+            return title + '\n' + storage_layout + '\n'
+        else:
+            return None
+
     def _display_context(self, cmdloop=True):
         metadata_view = self._get_metadata()
         print(metadata_view)
@@ -800,6 +962,9 @@ class EthDbgShell(cmd.Cmd):
         print(stack_view)
         callstack_view = self._get_callstack()
         print(callstack_view)
+        storage_layout_view = self._get_storage_layout_view()
+        if storage_layout_view is not None:
+            print(storage_layout_view)
         storage_view = self._get_storage()
         print(storage_view)
 
