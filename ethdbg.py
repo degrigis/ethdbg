@@ -606,7 +606,7 @@ class EthDbgShell(cmd.Cmd):
                 except Exception:
                     print("Invalid breakpoint")
 
-    def do_del = do_clear 
+    do_del = do_clear 
 
     def do_run(self, arg):
         if self.started:
