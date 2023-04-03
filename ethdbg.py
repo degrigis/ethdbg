@@ -318,16 +318,6 @@ class EthDbgShell(cmd.Cmd):
                 print("You need to start the debugger first. Use 'start' command")
         return wrapper
 
-    def reset_dbg_state(self):
-        self.history = list()
-        self.comp = None
-        self.temp_break = False
-        self.log_op = False
-        self.sstores = {}
-        self.sloads = {}
-        self.callstack = []
-        self.started = False
-
     # COMMANDS
     def do_chain(self, arg):
         print(f'{self.debug_target.chain}@{self.debug_target.block_number}:{self.w3.provider.endpoint_uri}')
@@ -1285,3 +1275,4 @@ if __name__ == "__main__":
         except RestartDbgException:
             old_breaks = ethdbgshell.breakpoints
             ethdbgshell = EthDbgShell(ethdbg_conf, w3, debug_target=debug_target, breaks=old_breaks)
+            ethdbgshell.cmdqueue.append("start\n")
