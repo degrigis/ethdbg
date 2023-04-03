@@ -433,10 +433,11 @@ class EthDbgShell(cmd.Cmd):
             transaction=txn,
         )
         
-        if type(comp.error) == eth.exceptions.OutOfGas:
-            self._display_context(cmdloop=False, with_error='Out Of Gas')
-        elif type(comp.error) == eth.exceptions.Revert:
-            self._display_context(cmdloop=False, with_error=f'Reverted: {comp.error}')
+        if hasattr(comp, 'error'):
+            if type(comp.error) == eth.exceptions.OutOfGas:
+                self._display_context(cmdloop=False, with_error='Out Of Gas')
+            elif type(comp.error) == eth.exceptions.Revert:
+                self._display_context(cmdloop=False, with_error=f'Reverted: {comp.error}')
             
 
     def do_context(self, arg):
@@ -824,26 +825,15 @@ class EthDbgShell(cmd.Cmd):
         title = f'{message:{fill}{align}{width}}'+'\n'
 
         _stack = ''
+        
         for entry_slot, entry in enumerate(self.comp._stack.values[::-1][0:10]):
             entry_type = entry[0]
             entry_val = entry[1]
-            if entry_type == bytes:
-                entry_val = entry_val.hex()
-                entry_val_str = ''
-                if attempt_decode:
-                    try:
-                        # Automatically decode strings if you can :)
-                        entry_val_str = bytes.fromhex(entry_val).decode('utf-8')
-                    except UnicodeDecodeError:
-                        pass
-                if entry_val_str != '':
-                    _stack += f'{hex(entry_slot)}│ 0x{entry_val}  {entry_val_str!r}\n'
-                else:
-                    _stack += f'{hex(entry_slot)}│ 0x{entry_val}\n'
-            else:
-                # it's an int
-                _stack += f'{hex(entry_slot)}│ {hex(entry_val)}\n'
-
+            
+            entry_val = int.from_bytes(HexBytes(entry_val), byteorder='big')
+            
+            _stack += f'{hex(entry_slot)}│ {hex(entry_val)}\n'
+            
         # Decoration of the stack given the current opcode
         if self.curr_opcode.mnemonic == "CALL":
             _more_stack = _stack.split("\n")[7:]
