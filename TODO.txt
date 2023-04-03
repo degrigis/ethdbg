@@ -1,7 +1,6 @@
 2- Support for Infura
-4- Telescope command and automatic abi decoding for opcodes 
-5- Formatting of text should be improved 
-6- Disassembling of next instruction. We can do it through emulation.
+4- Telescope command and automatic abi decoding for opcodes  
+6- Display if we are taking next jump or not through emulation
 7- Integration with ethpwn 
 9- watchpoints on storage location or memory
 12- support for multiple transactions

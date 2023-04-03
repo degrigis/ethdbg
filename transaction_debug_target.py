@@ -164,7 +164,7 @@ class TransactionDebugTarget:
 
     @gas.setter
     def gas(self, gas=None):
-        assert self._gas is None or self._gas == gas
+        #assert self._gas is None or self._gas == gas
         if gas is not None:
             self._gas = gas
 

@@ -309,6 +309,8 @@ class EthDbgShell(cmd.Cmd):
 
         # Whether we want to stop on RETURN/STOP operations
         self.stop_on_returns = False
+        
+        self.logs = list()
 
     def only_when_started(func):
         def wrapper(self, *args, **kwargs):
@@ -425,21 +427,29 @@ class EthDbgShell(cmd.Cmd):
         
         if hasattr(comp, 'error'):
             if type(comp.error) == eth.exceptions.OutOfGas:
-                self._display_context(cmdloop=False, with_error='Out Of Gas')
+                self._display_context(cmdloop=False, with_message=f'❌ {RED_BACKGROUND} ERROR: Out Of Gas{RESET_COLOR}')
             elif type(comp.error) == eth.exceptions.Revert:
-                self._display_context(cmdloop=False, with_error=f'Reverted: {comp.error}')
+                self._display_context(cmdloop=False, with_message=f'❌ {RED_BACKGROUND} ERROR: Reverted: {comp.error}{RESET_COLOR}')
+        else:
+            self._display_context(cmdloop=False, with_message=f'✔️ {GREEN_BACKGROUND} Execution Terminated!{RESET_COLOR}')
             
 
     def do_context(self, arg):
         if self.started:
-            callstack_view = self._get_callstack()
-            print(callstack_view)
-            disass_view = self._get_disass()
-            print(disass_view)
             metadata_view = self._get_metadata()
             print(metadata_view)
+            disass_view = self._get_disass()
+            print(disass_view)
+            source_view = self._get_source_view()
+            if source_view is not None:
+                print(source_view)
             stack_view = self._get_stack()
             print(stack_view)
+            callstack_view = self._get_callstack()
+            print(callstack_view)
+            storage_layout_view = self._get_storage_layout_view()
+            if storage_layout_view is not None:
+                print(storage_layout_view)
             storage_view = self._get_storage()
             print(storage_view)
         else:
@@ -449,7 +459,7 @@ class EthDbgShell(cmd.Cmd):
         if arg and not self.started:
             self.debug_target.calldata = arg
         else:
-            print(f'{self.debug_target.calldata}')
+            print(f'{self.comp.msg.data.hex()}')
 
     def do_weitoeth(self, arg):
         try:
@@ -498,7 +508,7 @@ class EthDbgShell(cmd.Cmd):
                 print(f' {YELLOW_COLOR}[w]{RESET_COLOR} Slot: {sstore_slot} | Value: {sstore_val}')
         else:
             for ref_account, sstores in self.sstores.items():
-                print(f'Account: {ref_account}:')
+                print(f'Account: {BOLD_TEXT}{BLUE_COLOR}{ref_account}{RESET_COLOR}:')
                 for sstore_slot, sstore_val in sstores.items():
                     print(f' {YELLOW_COLOR}[w]{RESET_COLOR} Slot: {sstore_slot} | Value: {sstore_val}')
 
@@ -510,7 +520,7 @@ class EthDbgShell(cmd.Cmd):
                 print(f' {CYAN_COLOR}[r]{RESET_COLOR} Slot: {sload_slot} | Value: {hex(sload_val)}')
         else:
             for ref_account, sloads in self.sloads.items():
-                print(f'Account: {ref_account}:')
+                print(f'Account: {BOLD_TEXT}{BLUE_COLOR}{ref_account}{RESET_COLOR}:')
                 for sload_slot, sload_val in sloads.items():
                     print(f' {CYAN_COLOR}[r]{RESET_COLOR} Slot: {sload_slot} | Value: {hex(sload_val)}')
 
@@ -639,9 +649,11 @@ class EthDbgShell(cmd.Cmd):
         
         if hasattr(comp, 'error'):
             if type(comp.error) == eth.exceptions.OutOfGas:
-                self._display_context(cmdloop=False, with_error='Out Of Gas')
+                self._display_context(cmdloop=False, with_message=f'❌ {RED_BACKGROUND} ERROR: Out Of Gas{RESET_COLOR}')
             elif type(comp.error) == eth.exceptions.Revert:
-                self._display_context(cmdloop=False, with_error=f'Reverted: {comp.error}')
+                self._display_context(cmdloop=False, with_message=f'❌ {RED_BACKGROUND} ERROR: Reverted: {comp.error}{RESET_COLOR}')
+        else:
+            self._display_context(cmdloop=False, with_message=f'✔️ {GREEN_BACKGROUND} Execution Terminated!{RESET_COLOR}')
         
     do_r = do_run
 
@@ -753,7 +765,7 @@ class EthDbgShell(cmd.Cmd):
         _history = ''
         rev_history = self.history[::-1]
         curr_ins = rev_history[0]
-        slice_history = rev_history[1:10]
+        slice_history = rev_history[1:3]
         slice_history = slice_history[::-1]
         for insn in slice_history:
             _history += '  ' + insn + '\n'
@@ -774,7 +786,7 @@ class EthDbgShell(cmd.Cmd):
         _next_opcodes_str = f''
 
         # print 5 instruction after 
-        for _ in range(0,3):
+        for _ in range(0,5):
             pc += insn.size
             with self.comp.code.seek(pc):
                 opcode_bytes = self.comp.code.read(64)
@@ -802,12 +814,13 @@ class EthDbgShell(cmd.Cmd):
         curr_account_code = '0x' + self.comp.msg.code_address.hex()
         curr_account_storage = '0x' + self.comp.msg.storage_address.hex()
         curr_balance = self.comp.state.get_balance(self.comp.msg.storage_address)
+        curr_balance_eth = int(curr_balance) / 10**18
         gas_remaining = self.comp.get_gas_remaining()
         gas_used = self.comp.get_gas_used()
         gas_limit = self.comp.state.gas_limit
 
         _metadata = f'Current Code Account: {YELLOW_COLOR}{curr_account_code}{RESET_COLOR} | Current Storage Account: {YELLOW_COLOR}{curr_account_storage}{RESET_COLOR}\n'
-        _metadata += f'Balance: {curr_balance} wei | Gas Remaining: {gas_remaining} | Gas Used: {gas_used} | Gas Limit: {gas_limit}'
+        _metadata += f'💰 Balance: {curr_balance} wei ({curr_balance_eth} ETH) | ⛽ Gas Remaining: {gas_remaining} | ⛽ Gas Used: {gas_used} | ⛽ Gas Limit: {gas_limit}'
 
         return title + _metadata
 
@@ -1022,11 +1035,11 @@ class EthDbgShell(cmd.Cmd):
         else:
             return None
 
-    def _display_context(self, cmdloop=True, with_error=''):
+    def _display_context(self, cmdloop=True, with_message=''):
         metadata_view = self._get_metadata()
         
-        if with_error != '':
-            metadata_view += f'\n{RED_COLOR}Error: {with_error}{RESET_COLOR}'
+        if with_message != '':
+            metadata_view += f'\nStatus: {with_message}'
         
         print(metadata_view)
         disass_view = self._get_disass()
@@ -1061,7 +1074,7 @@ class EthDbgShell(cmd.Cmd):
         # the computation.code.__iter__() has already incremented the program counter by 1, account for this
         pc = computation.code.program_counter - 1
         self.curr_pc = pc
-
+                    
         with computation.code.seek(pc):
             opcode_bytes = computation.code.read(64) # max 32 byte immediate + 32 bytes should be enough, right???
 
@@ -1084,23 +1097,23 @@ class EthDbgShell(cmd.Cmd):
 
         if self.temp_break:
             self.temp_break = False
-            self._display_context()
+            self._display_context(with_message=f'🎯 {YELLOW_BACKGROUND}Breakpoint [temp] reached{RESET_COLOR}')
         else:
             # BREAKPOINT MANAGEMENT
-            for sbp in self.breakpoints:
+            for sbpid, sbp in enumerate(self.breakpoints):
                 if sbp.eval_bp(self.comp, pc, opcode, self.callstack):
                     if sbp.temp:
                         self.breakpoints.remove(sbp)
-                    self._display_context()
+                    self._display_context(with_message=f'🎯 {YELLOW_BACKGROUND}Breakpoint [{sbpid}] reached{RESET_COLOR}')
 
         if self.temp_break_finish and len(self.callstack) < self.finish_curr_stack_depth:
             # Reset finish break condition
             self.temp_break_finish = False
             self.finish_curr_stack_depth = None
-            self._display_context()
+            self._display_context(with_message=f'🎯 {YELLOW_BACKGROUND}Breakpoint [finish] reached{RESET_COLOR}')
 
-        elif self.stop_on_returns and (opcode.mnemonic == "STOP" or opcode.mnemonic == "RETURN") and len(self.callstack) == 1:
-            self._display_context()
+        elif self.stop_on_returns and (opcode.mnemonic == "STOP" or opcode.mnemonic == "RETURN"):
+            self._display_context(with_message=f'🎯 {YELLOW_BACKGROUND}Breakpoint [stop/return] reached{RESET_COLOR}')
 
         if opcode.mnemonic == "SSTORE":
             ref_account = '0x' + computation.msg.storage_address.hex()
@@ -1131,7 +1144,7 @@ class EthDbgShell(cmd.Cmd):
                 self.sloads[ref_account][slot_id] = slot_val
             else:
                 self.sloads[ref_account][slot_id] = slot_val
-
+        
         if opcode.mnemonic in CALL_OPCODES:
 
             if opcode.mnemonic == "CALL":
@@ -1206,15 +1219,6 @@ class EthDbgShell(cmd.Cmd):
                 print(f"Plz add support for {opcode.mnemonic}")
 
         if opcode.mnemonic in RETURN_OPCODES:
-            if opcode.mnemonic == "REVERT":
-                error = '""'
-                try:
-                    error =  self.comp.error
-                except Exception:
-                    pass
-                print(f'{YELLOW_COLOR}>>> Execution Reverted at 0x{computation.msg.code_address.hex()} | PC: {hex(pc)} | Message: {error} <<<{RESET_COLOR}')
-                self._display_context()
-
             self.callstack.pop()
                         
         # Execute the opcode!
