@@ -307,6 +307,9 @@ class EthDbgShell(cmd.Cmd):
         #  Whether we want to display the execute ops
         self.log_op = False
 
+        # Whether we want to stop on RETURN/STOP operations
+        self.stop_on_returns = False
+
     def only_when_started(func):
         def wrapper(self, *args, **kwargs):
             if self.started:
@@ -650,6 +653,10 @@ class EthDbgShell(cmd.Cmd):
     def do_hide_sstores(self, arg):
         self.hide_sstores = not self.hide_sstores
         print(f'Hiding sstores: {self.hide_sstores}')
+
+    def do_stop_on_returns(self, arg):
+        self.stop_on_returns = not self.stop_on_returns
+        print(f'Stopping on returns: {self.stop_on_returns}')
     
     def do_quit(self, arg):
         print()
@@ -859,6 +866,7 @@ class EthDbgShell(cmd.Cmd):
                 _stack[3] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[8:]}...{RESET_COLOR}'
             else:
                 _stack[3] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[8:]}{RESET_COLOR}'
+            
             _stack[5] += f'{BRIGHT_YELLOW_COLOR} (retOffset) {RESET_COLOR}'
             _stack[6] += f'{BRIGHT_YELLOW_COLOR} (retSize) {RESET_COLOR}'
 
@@ -887,7 +895,8 @@ class EthDbgShell(cmd.Cmd):
             if argSizeHuge:
                 _stack[2] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[4:]}...{RESET_COLOR}'
             else:
-                _stack[2] += f'{ORANGE_COLOR}→ 0x{memory_at_offset} {RESET_COLOR}'
+                _stack[2] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[8:]}{RESET_COLOR}'
+            
             _stack[4] += f'{BLUE_COLOR} (retOffset) {RESET_COLOR}'
             _stack[5] += f'{BLUE_COLOR} (retSize) {RESET_COLOR}'
 
@@ -917,7 +926,8 @@ class EthDbgShell(cmd.Cmd):
             if argSizeHuge:
                 _stack[2] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[4:]}...{RESET_COLOR}'
             else:
-                _stack[2] += f'{ORANGE_COLOR}→ 0x{memory_at_offset} {RESET_COLOR}'
+                _stack[2] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[8:]}{RESET_COLOR}'
+            
             _stack[4] += f'{BLUE_COLOR} (retOffset) {RESET_COLOR}'
             _stack[5] += f'{BLUE_COLOR} (retSize) {RESET_COLOR}'
 
@@ -1093,7 +1103,7 @@ class EthDbgShell(cmd.Cmd):
             self.finish_curr_stack_depth = None
             self._display_context()
 
-        elif opcode.mnemonic == "STOP" or opcode.mnemonic == "RETURN" and len(self.callstack) == 1:
+        elif self.stop_on_returns and (opcode.mnemonic == "STOP" or opcode.mnemonic == "RETURN") and len(self.callstack) == 1:
             self._display_context()
 
         if opcode.mnemonic == "SSTORE":
