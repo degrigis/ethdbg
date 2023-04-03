@@ -432,6 +432,12 @@ class EthDbgShell(cmd.Cmd):
             header=header,
             transaction=txn,
         )
+        
+        if type(comp.error) == eth.exceptions.OutOfGas:
+            self._display_context(cmdloop=False, with_error='Out Of Gas')
+        elif type(comp.error) == eth.exceptions.Revert:
+            self._display_context(cmdloop=False, with_error=f'Reverted: {comp.error}')
+            
 
     def do_context(self, arg):
         if self.started:
@@ -639,7 +645,7 @@ class EthDbgShell(cmd.Cmd):
             header=header,
             transaction=txn,
         )
-
+        
     do_r = do_run
 
     def do_log_op(self, arg):
@@ -1030,8 +1036,12 @@ class EthDbgShell(cmd.Cmd):
         else:
             return None
 
-    def _display_context(self, cmdloop=True):
+    def _display_context(self, cmdloop=True, with_error=''):
         metadata_view = self._get_metadata()
+        
+        if with_error != '':
+            metadata_view += f'\n{RED_COLOR}Error: {with_error}{RESET_COLOR}'
+        
         print(metadata_view)
         disass_view = self._get_disass()
         print(disass_view)
@@ -1220,7 +1230,7 @@ class EthDbgShell(cmd.Cmd):
                 self._display_context()
 
             self.callstack.pop()
-
+                        
         # Execute the opcode!
         opcode(computation=computation)
 

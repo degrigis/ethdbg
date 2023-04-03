@@ -241,7 +241,7 @@ class TransactionDebugTarget:
         self.target_address = kwargs.pop('to', None) or tx_data.get('to', None)
         self.source_address = kwargs.pop('sender', None) or tx_data.get('from', None)
         self.calldata = kwargs.pop('calldata', None) or kwargs.pop('input', None) or tx_data.get('input', None)
-
+        
         for k, v in tx_data.items():
             k_snake = to_snake_case(k)
             value = kwargs.pop(k_snake, None) or kwargs.pop(k, None) or v
