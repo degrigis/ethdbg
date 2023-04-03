@@ -647,6 +647,12 @@ class EthDbgShell(cmd.Cmd):
             transaction=txn,
         )
         
+        if hasattr(comp, 'error'):
+            if type(comp.error) == eth.exceptions.OutOfGas:
+                self._display_context(cmdloop=False, with_error='Out Of Gas')
+            elif type(comp.error) == eth.exceptions.Revert:
+                self._display_context(cmdloop=False, with_error=f'Reverted: {comp.error}')
+        
     do_r = do_run
 
     def do_log_op(self, arg):
