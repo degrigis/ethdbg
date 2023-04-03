@@ -1093,9 +1093,9 @@ class EthDbgShell(cmd.Cmd):
             # BREAKPOINT MANAGEMENT
             for sbp in self.breakpoints:
                 if sbp.eval_bp(self.comp, pc, opcode, self.callstack):
-                    self._display_context()
                     if sbp.temp:
                         self.breakpoints.remove(sbp)
+                    self._display_context()
 
         if self.temp_break_finish and len(self.callstack) < self.finish_curr_stack_depth:
             # Reset finish break condition
