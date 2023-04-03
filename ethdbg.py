@@ -244,7 +244,6 @@ ORIGINAL_extract_transaction_sender = eth._utils.transactions.extract_transactio
 
 class EthDbgShell(cmd.Cmd):
 
-    intro = '\nType help or ? to list commands.\n'
     prompt = f'{RED_COLOR}ethdbg{RESET_COLOR}➤ '
 
     def __init__(self, ethdbg_conf, w3, debug_target, breaks=None, **kwargs):
@@ -1273,6 +1272,9 @@ if __name__ == "__main__":
     while True:
         try:
             ethdbgshell.cmdloop()
+        except KeyboardInterrupt:
+            print("")
+            continue
         except ExitCmdException:
             print("Program terminated.")
             continue
