@@ -3,18 +3,19 @@ import re
 from ethdbg_exceptions import InvalidBreakpointException
 from evm import ALL_EVM_OPCODES, ComputationAPI, OpcodeAPI
 
-ALLOWED_COND_BPS = ['addr', 'saddr', 'op', 'pc', 'value']
+ALLOWED_COND_BPS = ['addr', 'saddr', 'opcode', 'pc', 'value']
 BPS_RE_PATTERN = r'([a-zA-Z]*)(==|!=|<=|>=|>|<|=)(.*)'
 ETH_ADDRESS = r'^(0x)?[0-9a-fA-F]{40}$'
 
 class Breakpoint():
-    def __init__(self, break_args):
+    def __init__(self, break_args, temp=False):
 
         # Processing of the breakpoint conditions
         self.conditions = list()
 
         self.pc = None
         self.op = None
+        self.temp = temp
         self.simple_bp = False
 
         # Is this a simple breakpoint?

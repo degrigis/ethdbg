@@ -245,7 +245,7 @@ class EthDbgShell(cmd.Cmd):
     intro = '\nType help or ? to list commands.\n'
     prompt = f'{RED_COLOR}ethdbg{RESET_COLOR}➤ '
 
-    def __init__(self, ethdbg_conf, w3, debug_target, **kwargs):
+    def __init__(self, ethdbg_conf, w3, debug_target, breaks=None, **kwargs):
         # call the parent class constructor
         super().__init__(**kwargs)
 
@@ -276,18 +276,19 @@ class EthDbgShell(cmd.Cmd):
         # per account so we can keep track of what storages slots have
         # been modified for every single contract that the transaction touched
         self.sstores = {}
-
+        self.hide_sstores = False
         # Recording here the SLOADs, the dictionary is organized
         # per account so we can keep track of what storages slots have
         # been modified for every single contract that the transaction touched
         self.sloads = {}
+        self.hide_sloads = False
 
         # Debugger state
         # ==============
         #  Whether the debugger is running or not
         self.started = False
         #  Breakpoints PCs
-        self.breakpoints: List[Breakpoint] = list()
+        self.breakpoints: List[Breakpoint] = breaks if breaks else list()
 
         # Used for finish command
         self.temp_break_finish = False
@@ -527,8 +528,22 @@ class EthDbgShell(cmd.Cmd):
             print(f'{RED_COLOR} Valid syntax is: <what><when><value>,<what><when><value>{RESET_COLOR}')
             print(f'{RED_COLOR}  <when> in (=, ==, !=, >, <, >=, <=){RESET_COLOR}')
             print(f'{RED_COLOR}  <what> in (addr, saddr, op, pc, value){RESET_COLOR}')
-    do_b = do_break
 
+    def do_tbreak(self, arg):
+        # parse the arg
+        break_args = arg.split(",")
+        try:
+            bp = Breakpoint(break_args, temp=True)
+            self.breakpoints.append(bp)
+        except InvalidBreakpointException:
+            print(f'{RED_COLOR}Invalid breakpoint{RESET_COLOR}:')
+            print(f'{RED_COLOR} Valid syntax is: <what><when><value>,<what><when><value>{RESET_COLOR}')
+            print(f'{RED_COLOR}  <when> in (=, ==, !=, >, <, >=, <=){RESET_COLOR}')
+            print(f'{RED_COLOR}  <what> in (addr, saddr, op, pc, value){RESET_COLOR}')
+    
+    do_b = do_break
+    do_tb = do_tbreak
+    
     @only_when_started
     def do_finish(self, arg):
         if len(self.callstack) > 1:
@@ -559,6 +574,22 @@ class EthDbgShell(cmd.Cmd):
 
     do_s = do_step
 
+    def do_next(self, arg):
+        pc = self.curr_pc
+        with self.comp.code.seek(pc):
+            opcode_bytes = self.comp.code.read(64) # max 32 byte immediate + 32 bytes should be enough, right???
+
+        assert self.debug_target.fork is not None
+
+        if opcode_bytes:
+            insn: Instruction = disassemble_one(opcode_bytes, pc=pc, fork=self.debug_target.fork)
+            assert insn is not None, "64 bytes was not enough to disassemble?? or this is somehow an invalid opcode??"
+            assert insn.mnemonic == self.curr_opcode.mnemonic, "disassembled opcode does not match the opcode we're currently executing??"
+            next_pc = hex(pc + insn.size)
+            curr_account_code = '0x' + self.comp.msg.code_address.hex()
+            self.do_tbreak(f'pc={next_pc},addr={curr_account_code}')
+            self._resume()
+
     def do_clear(self, arg):
         if arg:
             if arg == "all":
@@ -572,6 +603,8 @@ class EthDbgShell(cmd.Cmd):
                     print(f'Breakpoint cleared at {arg}')
                 except Exception:
                     print("Invalid breakpoint")
+
+    def do_del = do_clear 
 
     def do_run(self, arg):
         if self.started:
@@ -608,6 +641,14 @@ class EthDbgShell(cmd.Cmd):
         self.log_op = not self.log_op
         print(f'Logging opcodes: {self.log_op}')
 
+    def do_hide_sloads(self, arg):
+        self.hide_sloads = not self.hide_sloads
+        print(f'Hiding sloads: {self.hide_sloads}')
+
+    def do_hide_sstores(self, arg):
+        self.hide_sstores = not self.hide_sstores
+        print(f'Hiding sstores: {self.hide_sstores}')
+    
     def do_quit(self, arg):
         print()
         sys.exit()
@@ -706,9 +747,35 @@ class EthDbgShell(cmd.Cmd):
             _history += '  ' + insn + '\n'
         _history += f'→ {RED_COLOR}{self.history[-1]}{RESET_COLOR}' + '\n'
 
+        # Let's see what's next
+        pc = self.curr_pc
+        with self.comp.code.seek(pc):
+            opcode_bytes = self.comp.code.read(64) # max 32 byte immediate + 32 bytes should be enough, right???
 
+        assert self.debug_target.fork is not None
 
-        return title + _history
+        if opcode_bytes:
+            insn: Instruction = disassemble_one(opcode_bytes, pc=pc, fork=self.debug_target.fork)
+            assert insn is not None, "64 bytes was not enough to disassemble?? or this is somehow an invalid opcode??"
+            assert insn.mnemonic == self.curr_opcode.mnemonic, "disassembled opcode does not match the opcode we're currently executing??"
+
+        _next_opcodes_str = f''
+
+        # print 5 instruction after 
+        for _ in range(0,3):
+            pc += insn.size
+            with self.comp.code.seek(pc):
+                opcode_bytes = self.comp.code.read(64)
+            if opcode_bytes:
+                insn: Instruction = disassemble_one(opcode_bytes, pc=pc, fork=self.debug_target.fork)
+                assert insn is not None, "64 bytes was not enough to disassemble?? or this is somehow an invalid opcode??"
+                hex_bytes = ' '.join(f'{b:02x}' for b in insn.bytes[:5])
+                if insn.size > 5: hex_bytes += ' ...'
+                _next_opcodes_str += f'  {pc:#06x}  {hex_bytes:18} {str(insn):20}    // {insn.description}\n'
+            else:
+                break
+
+        return title + _history + _next_opcodes_str
 
     def _get_metadata(self):
         message = f"{GREEN_COLOR}Metadata {RESET_COLOR}"
@@ -858,7 +925,7 @@ class EthDbgShell(cmd.Cmd):
 
     def _get_storage(self):
         ref_account = '0x' + self.comp.msg.storage_address.hex()
-        message = f"{GREEN_COLOR}Active Storage Slots [{ref_account}]{RESET_COLOR}"
+        message = f"{GREEN_COLOR}Last Active Storage Slots [{ref_account}]{RESET_COLOR}"
 
         fill = HORIZONTAL_LINE
         align = '<'
@@ -869,19 +936,20 @@ class EthDbgShell(cmd.Cmd):
 
         # Iterate over sloads for this account
         _sload_log = ''
-        if ref_account in self.sloads:
-            ref_account_sloads = self.sloads[ref_account]
-            for slot, val in ref_account_sloads.items():
-                _sload_log += f'{CYAN_COLOR}[r]{RESET_COLOR} {slot} -> {hex(val)}\n'
+        if not self.hide_sloads:
+            if ref_account in self.sloads:
+                ref_account_sloads = self.sloads[ref_account]
+                for slot, val in ref_account_sloads.items():
+                    _sload_log += f'{CYAN_COLOR}[r]{RESET_COLOR} {slot} -> {hex(val)}\n'
 
-        # Iterate over sstore for this account
         _sstore_log = ''
-        ref_account = '0x' + self.comp.msg.storage_address.hex()
-        if ref_account in self.sstores:
-            ref_account_sstores = self.sstores[ref_account]
-            for slot, val in ref_account_sstores.items():
-                _sstore_log += f'{YELLOW_COLOR}[w]{RESET_COLOR} {slot} -> {val}\n'
-
+        # Iterate over sstore for this account
+        if not self.hide_sstores:
+            ref_account = '0x' + self.comp.msg.storage_address.hex()
+            if ref_account in self.sstores:
+                ref_account_sstores = self.sstores[ref_account]
+                for slot, val in ref_account_sstores.items():
+                    _sstore_log += f'{YELLOW_COLOR}[w]{RESET_COLOR} {slot} -> {val}\n'
 
         return title + legend + _sload_log + _sstore_log
 
@@ -984,6 +1052,7 @@ class EthDbgShell(cmd.Cmd):
 
         # the computation.code.__iter__() has already incremented the program counter by 1, account for this
         pc = computation.code.program_counter - 1
+        self.curr_pc = pc
 
         with computation.code.seek(pc):
             opcode_bytes = computation.code.read(64) # max 32 byte immediate + 32 bytes should be enough, right???
@@ -999,6 +1068,7 @@ class EthDbgShell(cmd.Cmd):
         else:
             _opcode_str = f'{pc:#06x}  {"":18} {opcode.mnemonic:15} [WARNING: no code]'
 
+
         if self.log_op:
             print(_opcode_str)
 
@@ -1012,6 +1082,8 @@ class EthDbgShell(cmd.Cmd):
             for sbp in self.breakpoints:
                 if sbp.eval_bp(self.comp, pc, opcode, self.callstack):
                     self._display_context()
+                    if sbp.temp:
+                        self.breakpoints.remove(sbp)
 
         if self.temp_break_finish and len(self.callstack) < self.finish_curr_stack_depth:
             # Reset finish break condition
@@ -1094,16 +1166,17 @@ class EthDbgShell(cmd.Cmd):
 
                 value_sent = int.from_bytes(HexBytes(computation._stack.values[-3][1]), byteorder='big')
 
-                # We gotta parse the callstack according to the *CALL opcode
-                new_callframe = CallFrame(
-                                        contract_target,
-                                        '0x' + computation.msg.code_address.hex(),
-                                        '0x' + computation.transaction_context.origin.hex(),
-                                        value_sent,
-                                        "STATICCALL",
-                                        hex(pc)
-                                        )
-                self.callstack.append(new_callframe)
+                if int(contract_target,16) not in PRECOMPILED_CONTRACTS.values():
+                    # We gotta parse the callstack according to the *CALL opcode
+                    new_callframe = CallFrame(
+                                            contract_target,
+                                            '0x' + computation.msg.code_address.hex(),
+                                            '0x' + computation.transaction_context.origin.hex(),
+                                            value_sent,
+                                            "STATICCALL",
+                                            hex(pc)
+                                            )
+                    self.callstack.append(new_callframe)
 
 
             elif opcode.mnemonic == "CREATE":
@@ -1192,4 +1265,5 @@ if __name__ == "__main__":
             print("Program terminated.")
             continue
         except RestartDbgException:
-            ethdbgshell = EthDbgShell(ethdbg_conf, w3, debug_target=debug_target)
+            old_breaks = ethdbgshell.breakpoints
+            ethdbgshell = EthDbgShell(ethdbg_conf, w3, debug_target=debug_target, breaks=old_breaks)
