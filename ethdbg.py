@@ -14,7 +14,6 @@ import sys
 import sha3
 from breakpoint import Breakpoint, ETH_ADDRESS
 
-from py4byte import signatures as decodesignature
 from ethpwn.prelude import *
 from ethpwn.pyevmasm_fixed import disassemble_one, Instruction
 
