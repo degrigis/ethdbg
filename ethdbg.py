@@ -308,7 +308,7 @@ class EthDbgShell(cmd.Cmd):
 
         # Whether we want to stop on RETURN/STOP operations
         self.stop_on_returns = False
-        
+
         self.logs = list()
 
     def only_when_started(func):
@@ -423,7 +423,7 @@ class EthDbgShell(cmd.Cmd):
             header=header,
             transaction=txn,
         )
-        
+
         if hasattr(comp, 'error'):
             if type(comp.error) == eth.exceptions.OutOfGas:
                 self._display_context(cmdloop=False, with_message=f'❌ {RED_BACKGROUND} ERROR: Out Of Gas{RESET_COLOR}')
@@ -431,7 +431,7 @@ class EthDbgShell(cmd.Cmd):
                 self._display_context(cmdloop=False, with_message=f'❌ {RED_BACKGROUND} ERROR: Reverted: {comp.error}{RESET_COLOR}')
         else:
             self._display_context(cmdloop=False, with_message=f'✔️ {GREEN_BACKGROUND} Execution Terminated!{RESET_COLOR}')
-            
+
 
     def do_context(self, arg):
         if self.started:
@@ -551,10 +551,10 @@ class EthDbgShell(cmd.Cmd):
             print(f'{RED_COLOR} Valid syntax is: <what><when><value>,<what><when><value>{RESET_COLOR}')
             print(f'{RED_COLOR}  <when> in (=, ==, !=, >, <, >=, <=){RESET_COLOR}')
             print(f'{RED_COLOR}  <what> in (addr, saddr, op, pc, value){RESET_COLOR}')
-    
+
     do_b = do_break
     do_tb = do_tbreak
-    
+
     @only_when_started
     def do_finish(self, arg):
         if len(self.callstack) > 1:
@@ -615,7 +615,7 @@ class EthDbgShell(cmd.Cmd):
                 except Exception:
                     print("Invalid breakpoint")
 
-    do_del = do_clear 
+    do_del = do_clear
 
     def do_run(self, arg):
         if self.started:
@@ -645,7 +645,7 @@ class EthDbgShell(cmd.Cmd):
             header=header,
             transaction=txn,
         )
-        
+
         if hasattr(comp, 'error'):
             if type(comp.error) == eth.exceptions.OutOfGas:
                 self._display_context(cmdloop=False, with_message=f'❌ {RED_BACKGROUND} ERROR: Out Of Gas{RESET_COLOR}')
@@ -653,7 +653,7 @@ class EthDbgShell(cmd.Cmd):
                 self._display_context(cmdloop=False, with_message=f'❌ {RED_BACKGROUND} ERROR: Reverted: {comp.error}{RESET_COLOR}')
         else:
             self._display_context(cmdloop=False, with_message=f'✔️ {GREEN_BACKGROUND} Execution Terminated!{RESET_COLOR}')
-        
+
     do_r = do_run
 
     def do_log_op(self, arg):
@@ -671,7 +671,7 @@ class EthDbgShell(cmd.Cmd):
     def do_stop_on_returns(self, arg):
         self.stop_on_returns = not self.stop_on_returns
         print(f'Stopping on returns: {self.stop_on_returns}')
-    
+
     def do_quit(self, arg):
         print()
         sys.exit()
@@ -784,7 +784,7 @@ class EthDbgShell(cmd.Cmd):
 
         _next_opcodes_str = f''
 
-        # print 5 instruction after 
+        # print 5 instruction after
         for _ in range(0,5):
             pc += insn.size
             with self.comp.code.seek(pc):
@@ -833,15 +833,15 @@ class EthDbgShell(cmd.Cmd):
         title = f'{message:{fill}{align}{width}}'+'\n'
 
         _stack = ''
-        
+
         for entry_slot, entry in enumerate(self.comp._stack.values[::-1][0:10]):
             entry_type = entry[0]
             entry_val = entry[1]
-            
+
             entry_val = int.from_bytes(HexBytes(entry_val), byteorder='big')
-            
+
             _stack += f'{hex(entry_slot)}│ {hex(entry_val)}\n'
-            
+
         # Decoration of the stack given the current opcode
         if self.curr_opcode.mnemonic == "CALL":
             _more_stack = _stack.split("\n")[7:]
@@ -870,7 +870,7 @@ class EthDbgShell(cmd.Cmd):
                 _stack[3] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[8:]}...{RESET_COLOR}'
             else:
                 _stack[3] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[8:]}{RESET_COLOR}'
-            
+
             _stack[5] += f'{BRIGHT_YELLOW_COLOR} (retOffset) {RESET_COLOR}'
             _stack[6] += f'{BRIGHT_YELLOW_COLOR} (retSize) {RESET_COLOR}'
 
@@ -900,7 +900,7 @@ class EthDbgShell(cmd.Cmd):
                 _stack[2] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[4:]}...{RESET_COLOR}'
             else:
                 _stack[2] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[8:]}{RESET_COLOR}'
-            
+
             _stack[4] += f'{BLUE_COLOR} (retOffset) {RESET_COLOR}'
             _stack[5] += f'{BLUE_COLOR} (retSize) {RESET_COLOR}'
 
@@ -931,7 +931,7 @@ class EthDbgShell(cmd.Cmd):
                 _stack[2] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[4:]}...{RESET_COLOR}'
             else:
                 _stack[2] += f'{ORANGE_COLOR}→ {GREEN_COLOR}{BOLD_TEXT}[0x{memory_at_offset[0:8]}]{RESET_COLOR}{ORANGE_COLOR}{memory_at_offset[8:]}{RESET_COLOR}'
-            
+
             _stack[4] += f'{BLUE_COLOR} (retOffset) {RESET_COLOR}'
             _stack[5] += f'{BLUE_COLOR} (retSize) {RESET_COLOR}'
 
@@ -1036,10 +1036,10 @@ class EthDbgShell(cmd.Cmd):
 
     def _display_context(self, cmdloop=True, with_message=''):
         metadata_view = self._get_metadata()
-        
+
         if with_message != '':
             metadata_view += f'\nStatus: {with_message}'
-        
+
         print(metadata_view)
         disass_view = self._get_disass()
         print(disass_view)
@@ -1073,7 +1073,7 @@ class EthDbgShell(cmd.Cmd):
         # the computation.code.__iter__() has already incremented the program counter by 1, account for this
         pc = computation.code.program_counter - 1
         self.curr_pc = pc
-                    
+
         with computation.code.seek(pc):
             opcode_bytes = computation.code.read(64) # max 32 byte immediate + 32 bytes should be enough, right???
 
@@ -1143,7 +1143,7 @@ class EthDbgShell(cmd.Cmd):
                 self.sloads[ref_account][slot_id] = slot_val
             else:
                 self.sloads[ref_account][slot_id] = slot_val
-        
+
         if opcode.mnemonic in CALL_OPCODES:
 
             if opcode.mnemonic == "CALL":
@@ -1219,7 +1219,7 @@ class EthDbgShell(cmd.Cmd):
 
         if opcode.mnemonic in RETURN_OPCODES:
             self.callstack.pop()
-                        
+
         # Execute the opcode!
         opcode(computation=computation)
 
